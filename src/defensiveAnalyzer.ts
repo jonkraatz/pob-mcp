@@ -1,15 +1,28 @@
 /**
  * Defensive Analyzer for Path of Building builds
- * Analyzes defensive stats and provides recommendations
+ *
+ * Evaluates builds against the three-layer defensive framework:
+ *   1. Avoidance  — not getting hit or not taking full hits
+ *      (evasion, spell suppression, dodge, block)
+ *   2. Mitigation — reducing damage when you do get hit
+ *      (armour/PDR, endurance charges, elemental resists)
+ *   3. Recovery   — healing back up after damage
+ *      (life/ES regen, leech, gain on hit, ES recharge)
+ *
+ * A good build has at least 2 of these layers.
+ * An exceptional build has all 3, with strong values in each.
  */
 
 export interface DefensiveAnalysis {
   resistances: ResistanceAnalysis;
   lifePool: LifePoolAnalysis;
+  avoidance: AvoidanceAnalysis;
   mitigation: MitigationAnalysis;
   sustain: SustainAnalysis;
   recommendations: Recommendation[];
   overallScore: 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
+  defensiveLayerCount: number;
+  defensiveLayerSummary: string[];
 }
 
 export interface ResistanceAnalysis {
@@ -24,8 +37,20 @@ export interface LifePoolAnalysis {
   life: number;
   energyShield: number;
   total: number;
+  ehp: number;
   status: 'excellent' | 'good' | 'adequate' | 'low' | 'critical';
   recommendation?: string;
+}
+
+export interface AvoidanceAnalysis {
+  spellSuppression: number;
+  dodge: number;
+  spellDodge: number;
+  block: number;
+  evasionRating: number;
+  estimatedEvadeChance: number;
+  hasSignificantAvoidance: boolean;
+  summary: string;
 }
 
 export interface MitigationAnalysis {
@@ -33,6 +58,8 @@ export interface MitigationAnalysis {
   evasion: { value: number; effectiveness: string };
   block: { value: number; effectiveness: string };
   spellBlock: { value: number; effectiveness: string };
+  physicalDamageReduction: number;
+  enduranceCharges: number;
   overall: 'excellent' | 'good' | 'fair' | 'poor' | 'none';
 }
 
@@ -40,12 +67,13 @@ export interface SustainAnalysis {
   lifeRegen: { value: number; percentOfMax: number; status: string };
   manaRegen: { value: number; status: string };
   esRecharge: { value: number; status: string };
+  hasLeech: boolean;
   overall: 'excellent' | 'good' | 'adequate' | 'poor';
 }
 
 export interface Recommendation {
   priority: 'critical' | 'high' | 'medium' | 'low';
-  category: 'resistance' | 'life' | 'mitigation' | 'sustain';
+  category: 'resistance' | 'life' | 'mitigation' | 'sustain' | 'avoidance' | 'layers';
   issue: string;
   solutions: string[];
   impact?: string;
@@ -57,49 +85,73 @@ export interface Recommendation {
 export function analyzeDefenses(stats: Record<string, any>): DefensiveAnalysis {
   const resistances = analyzeResistances(stats);
   const lifePool = analyzeLifePool(stats);
+  const avoidance = analyzeAvoidance(stats);
   const mitigation = analyzeMitigation(stats);
   const sustain = analyzeSustain(stats);
 
   const recommendations: Recommendation[] = [];
-
-  // Generate recommendations based on analysis
   recommendations.push(...generateResistanceRecommendations(resistances));
   recommendations.push(...generateLifePoolRecommendations(lifePool));
+  recommendations.push(...generateAvoidanceRecommendations(avoidance));
   recommendations.push(...generateMitigationRecommendations(mitigation, stats));
   recommendations.push(...generateSustainRecommendations(sustain));
 
-  // Sort by priority
+  // Evaluate defensive layers
+  const avoidanceLayer = avoidance.hasSignificantAvoidance;
+  const mitigationLayer = mitigation.overall !== 'none' && mitigation.overall !== 'poor';
+  const recoveryLayer = sustain.overall !== 'poor';
+
+  const defensiveLayerCount = [avoidanceLayer, mitigationLayer, recoveryLayer].filter(Boolean).length;
+  const defensiveLayerSummary: string[] = [];
+
+  defensiveLayerSummary.push(
+    `${avoidanceLayer ? '✓' : '✗'} Avoidance: ${avoidance.summary}`
+  );
+  defensiveLayerSummary.push(
+    `${mitigationLayer ? '✓' : '✗'} Mitigation: ${mitigation.overall} (armour ${mitigation.armour.value.toLocaleString()}, PDR ${mitigation.physicalDamageReduction}%)`
+  );
+  defensiveLayerSummary.push(
+    `${recoveryLayer ? '✓' : '✗'} Recovery: ${sustain.overall} (regen ${sustain.lifeRegen.percentOfMax.toFixed(1)}%/s${sustain.hasLeech ? ', has leech' : ''})`
+  );
+
+  if (defensiveLayerCount < 2) {
+    recommendations.push({
+      priority: 'high',
+      category: 'layers',
+      issue: `Only ${defensiveLayerCount} of 3 defensive layers active (avoidance / mitigation / recovery)`,
+      solutions: [
+        'Avoidance: add evasion, spell suppression (50%), dodge, or block',
+        'Mitigation: add armour (Determination aura), endurance charges, or physical reduction',
+        'Recovery: add life regeneration, life leech, or gain-on-hit',
+      ],
+      impact: 'Builds with only one defensive layer are fragile — a single mechanic bypass kills you',
+    });
+  }
+
   recommendations.sort((a, b) => {
-    const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-    return priorityOrder[a.priority] - priorityOrder[b.priority];
+    const order = { critical: 0, high: 1, medium: 2, low: 3 };
+    return order[a.priority] - order[b.priority];
   });
 
-  const overallScore = calculateOverallScore(resistances, lifePool, mitigation, sustain);
+  const overallScore = calculateOverallScore(resistances, lifePool, mitigation, sustain, defensiveLayerCount);
 
   return {
     resistances,
     lifePool,
+    avoidance,
     mitigation,
     sustain,
     recommendations,
     overallScore,
+    defensiveLayerCount,
+    defensiveLayerSummary,
   };
 }
 
-/**
- * Analyze resistance stats
- */
 function analyzeResistances(stats: Record<string, any>): ResistanceAnalysis {
-  // Helper to get stat value - works with both Lua stats object and parsed stats
   const getStat = (key: string): number => {
-    // Try direct property access (Lua format)
-    if (stats[key] !== undefined) {
-      return parseFloat(stats[key]) || 0;
-    }
-    // Try with "Player" prefix (alternate format)
-    if (stats[`Player${key}`] !== undefined) {
-      return parseFloat(stats[`Player${key}`]) || 0;
-    }
+    if (stats[key] !== undefined) return parseFloat(stats[key]) || 0;
+    if (stats[`Player${key}`] !== undefined) return parseFloat(stats[`Player${key}`]) || 0;
     return 0;
   };
 
@@ -109,14 +161,15 @@ function analyzeResistances(stats: Record<string, any>): ResistanceAnalysis {
   const chaos = getStat('ChaosResist');
 
   const getResistStatus = (value: number) => {
-    if (value >= 75) return value > 75 ? 'overcapped' : 'capped';
-    return 'uncapped';
+    if (value > 75) return 'overcapped' as const;
+    if (value >= 75) return 'capped' as const;
+    return 'uncapped' as const;
   };
 
   const getChaosStatus = (value: number) => {
-    if (value >= 60) return 'good';
-    if (value >= 0) return 'low';
-    return 'dangerous';
+    if (value >= 60) return 'good' as const;
+    if (value >= 0) return 'low' as const;
+    return 'dangerous' as const;
   };
 
   return {
@@ -128,11 +181,7 @@ function analyzeResistances(stats: Record<string, any>): ResistanceAnalysis {
   };
 }
 
-/**
- * Analyze life pool
- */
 function analyzeLifePool(stats: Record<string, any>): LifePoolAnalysis {
-  // Helper to get stat value
   const getStat = (key: string): number => {
     if (stats[key] !== undefined) return parseFloat(stats[key]) || 0;
     if (stats[`Player${key}`] !== undefined) return parseFloat(stats[`Player${key}`]) || 0;
@@ -142,6 +191,18 @@ function analyzeLifePool(stats: Record<string, any>): LifePoolAnalysis {
   const life = getStat('Life');
   const es = getStat('EnergyShield');
   const total = life + es;
+
+  // Use TotalEHP from PoB if available, otherwise estimate from PDR
+  let ehp = getStat('TotalEHP');
+  if (!ehp || ehp <= total) {
+    const pdr = getStat('PhysicalDamageReduction');
+    // Approximate EHP: raw HP / (1 - mitigation%), capped at 5× total
+    if (pdr > 0 && pdr < 100) {
+      ehp = Math.round(total / (1 - pdr / 100));
+    } else {
+      ehp = total;
+    }
+  }
 
   let status: LifePoolAnalysis['status'];
   let recommendation: string | undefined;
@@ -155,20 +216,77 @@ function analyzeLifePool(stats: Record<string, any>): LifePoolAnalysis {
     recommendation = 'Consider adding more life/ES nodes or gear';
   } else if (total >= 2500) {
     status = 'low';
-    recommendation = 'Life/ES is quite low - prioritize defensive nodes';
+    recommendation = 'Life/ES is quite low — prioritize defensive nodes';
   } else {
     status = 'critical';
     recommendation = 'CRITICAL: Life/ES is dangerously low!';
   }
 
-  return { life, energyShield: es, total, status, recommendation };
+  return { life, energyShield: es, total, ehp, status, recommendation };
 }
 
 /**
- * Analyze mitigation
+ * Analyze avoidance layer:
+ *   - Spell suppression (50%+ = full cap)
+ *   - Evasion (gives % chance to evade attacks)
+ *   - Dodge (attack/spell dodge)
+ *   - Block
  */
+function analyzeAvoidance(stats: Record<string, any>): AvoidanceAnalysis {
+  const getStat = (key: string): number => {
+    if (stats[key] !== undefined) return parseFloat(stats[key]) || 0;
+    if (stats[`Player${key}`] !== undefined) return parseFloat(stats[`Player${key}`]) || 0;
+    return 0;
+  };
+
+  const spellSuppression = getStat('SpellSuppressionChance');
+  const dodge = getStat('DodgeChance') || getStat('AttackDodgeChance');
+  const spellDodge = getStat('SpellDodgeChance');
+  const block = getStat('BlockChance');
+  const evasionRating = getStat('Evasion');
+
+  // Rough evade chance estimate: evasion / (evasion + attacker_accuracy)
+  // At high tier content, attacker accuracy is roughly 5000–10000
+  // This is a simplified estimate — PoB computes this more precisely
+  const estimatedEvadeChance = evasionRating > 0
+    ? Math.min(75, Math.round((evasionRating / (evasionRating + 7500)) * 100))
+    : 0;
+
+  const parts: string[] = [];
+  if (spellSuppression >= 50) parts.push(`spell suppression ${spellSuppression}%`);
+  else if (spellSuppression > 0) parts.push(`partial suppression ${spellSuppression}%`);
+  if (estimatedEvadeChance >= 20) parts.push(`~${estimatedEvadeChance}% evade`);
+  if (dodge >= 20) parts.push(`${dodge}% dodge`);
+  if (spellDodge >= 20) parts.push(`${spellDodge}% spell dodge`);
+  if (block >= 30) parts.push(`${block}% block`);
+
+  // A meaningful avoidance layer means at least one solid avoidance mechanic:
+  //   - 50% spell suppression (full cap)
+  //   - OR evasion giving ≥30% evade chance
+  //   - OR dodge/spell dodge ≥30%
+  //   - OR block ≥30%
+  const hasSignificantAvoidance =
+    spellSuppression >= 50 ||
+    estimatedEvadeChance >= 30 ||
+    dodge >= 30 ||
+    spellDodge >= 30 ||
+    block >= 30;
+
+  const summary = parts.length > 0 ? parts.join(', ') : 'none';
+
+  return {
+    spellSuppression,
+    dodge,
+    spellDodge,
+    block,
+    evasionRating,
+    estimatedEvadeChance,
+    hasSignificantAvoidance,
+    summary,
+  };
+}
+
 function analyzeMitigation(stats: Record<string, any>): MitigationAnalysis {
-  // Helper to get stat value
   const getStat = (key: string): number => {
     if (stats[key] !== undefined) return parseFloat(stats[key]) || 0;
     if (stats[`Player${key}`] !== undefined) return parseFloat(stats[`Player${key}`]) || 0;
@@ -179,6 +297,8 @@ function analyzeMitigation(stats: Record<string, any>): MitigationAnalysis {
   const evasion = getStat('Evasion');
   const block = getStat('BlockChance');
   const spellBlock = getStat('SpellBlockChance');
+  const physicalDamageReduction = Math.round(getStat('PhysicalDamageReduction'));
+  const enduranceCharges = Math.round(getStat('EnduranceChargesMax') || 0);
 
   const getArmourEffectiveness = (value: number): string => {
     if (value >= 30000) return 'excellent (~40-50% phys reduction)';
@@ -204,15 +324,16 @@ function analyzeMitigation(stats: Record<string, any>): MitigationAnalysis {
     return 'none';
   };
 
-  // Determine overall mitigation
+  // Mitigation layer: meaningful if armour provides significant PDR, or endurance charges, or high block
   let overall: MitigationAnalysis['overall'];
-  const hasMitigation = armour >= 10000 || evasion >= 10000 || block >= 30;
+  const hasStrongMitigation = physicalDamageReduction >= 30 || enduranceCharges >= 3 || block >= 40;
+  const hasModerateMitigation = physicalDamageReduction >= 15 || armour >= 10000 || evasion >= 10000 || block >= 20;
 
-  if ((armour >= 30000 || evasion >= 30000) && block >= 40) {
+  if (hasStrongMitigation && (armour >= 15000 || block >= 40)) {
     overall = 'excellent';
-  } else if ((armour >= 15000 || evasion >= 15000) && block >= 20) {
+  } else if (hasStrongMitigation || (armour >= 15000 && block >= 20)) {
     overall = 'good';
-  } else if (hasMitigation) {
+  } else if (hasModerateMitigation) {
     overall = 'fair';
   } else if (armour >= 1000 || evasion >= 1000 || block >= 10) {
     overall = 'poor';
@@ -225,15 +346,13 @@ function analyzeMitigation(stats: Record<string, any>): MitigationAnalysis {
     evasion: { value: evasion, effectiveness: getEvasionEffectiveness(evasion) },
     block: { value: block, effectiveness: getBlockEffectiveness(block) },
     spellBlock: { value: spellBlock, effectiveness: getBlockEffectiveness(spellBlock) },
+    physicalDamageReduction,
+    enduranceCharges,
     overall,
   };
 }
 
-/**
- * Analyze sustain
- */
 function analyzeSustain(stats: Record<string, any>): SustainAnalysis {
-  // Helper to get stat value
   const getStat = (key: string): number => {
     if (stats[key] !== undefined) return parseFloat(stats[key]) || 0;
     if (stats[`Player${key}`] !== undefined) return parseFloat(stats[`Player${key}`]) || 0;
@@ -241,9 +360,11 @@ function analyzeSustain(stats: Record<string, any>): SustainAnalysis {
   };
 
   const lifeRegen = getStat('LifeRegen');
-  const life = getStat('Life') || 1; // Avoid division by zero
+  const life = getStat('Life') || 1;
   const manaRegen = getStat('ManaRegen');
   const esRecharge = getStat('ESRecharge');
+  const lifeLeechRate = getStat('LifeLeechGainRate');
+  const hasLeech = lifeLeechRate > 0;
 
   const lifeRegenPercent = (lifeRegen / life) * 100;
 
@@ -269,11 +390,11 @@ function analyzeSustain(stats: Record<string, any>): SustainAnalysis {
     return 'low or none';
   };
 
-  // Overall sustain assessment
+  // Recovery layer: meaningful if regen ≥1% or has leech or ES recharge
   let overall: SustainAnalysis['overall'];
-  if (lifeRegenPercent >= 3 || esRecharge >= 800) {
+  if (lifeRegenPercent >= 3 || esRecharge >= 800 || (hasLeech && lifeRegenPercent >= 1)) {
     overall = 'excellent';
-  } else if (lifeRegenPercent >= 1.5 || esRecharge >= 400) {
+  } else if (lifeRegenPercent >= 1.5 || esRecharge >= 400 || hasLeech) {
     overall = 'good';
   } else if (lifeRegenPercent >= 0.5 || esRecharge >= 100) {
     overall = 'adequate';
@@ -289,30 +410,24 @@ function analyzeSustain(stats: Record<string, any>): SustainAnalysis {
     },
     manaRegen: { value: manaRegen, status: getManaRegenStatus(manaRegen) },
     esRecharge: { value: esRecharge, status: getESRechargeStatus(esRecharge) },
+    hasLeech,
     overall,
   };
 }
 
-/**
- * Generate resistance recommendations
- */
 function generateResistanceRecommendations(analysis: ResistanceAnalysis): Recommendation[] {
   const recs: Recommendation[] = [];
-
-  // Check elemental resistances
   const uncapped: string[] = [];
   if (analysis.fire.status === 'uncapped') uncapped.push(`Fire (${analysis.fire.value}%)`);
   if (analysis.cold.status === 'uncapped') uncapped.push(`Cold (${analysis.cold.value}%)`);
-  if (analysis.lightning.status === 'uncapped')
-    uncapped.push(`Lightning (${analysis.lightning.value}%)`);
+  if (analysis.lightning.status === 'uncapped') uncapped.push(`Lightning (${analysis.lightning.value}%)`);
 
   if (uncapped.length > 0) {
     const needed = uncapped.map((r) => {
-      const match = r.match(/\((\d+)%\)/);
+      const match = r.match(/\((-?\d+)%\)/);
       const current = match ? parseInt(match[1]) : 0;
       return 75 - current;
     });
-
     recs.push({
       priority: 'critical',
       category: 'resistance',
@@ -327,46 +442,35 @@ function generateResistanceRecommendations(analysis: ResistanceAnalysis): Recomm
     });
   }
 
-  // Check chaos resistance
   if (analysis.chaos.status === 'dangerous') {
     recs.push({
       priority: 'high',
       category: 'resistance',
-      issue: `Chaos Resistance: ${analysis.chaos.value}% (negative or very low)`,
+      issue: `Chaos Resistance: ${analysis.chaos.value}% (negative)`,
       solutions: [
-        'Not critical but helpful against chaos damage',
         'Allocate chaos resist nodes if convenient',
         'Upgrade gear with chaos resist when possible',
         'Amethyst flask can help in chaos damage zones',
       ],
-      impact: 'Low priority unless facing chaos damage enemies',
+      impact: 'Negative chaos resist amplifies chaos damage taken',
     });
   } else if (analysis.chaos.status === 'low') {
     recs.push({
       priority: 'low',
       category: 'resistance',
       issue: `Chaos Resistance: ${analysis.chaos.value}% (could be better)`,
-      solutions: [
-        'Consider upgrading when convenient',
-        '30-60% chaos resist is comfortable for most content',
-      ],
+      solutions: ['Consider upgrading when convenient', '30–60% chaos resist is comfortable'],
     });
   }
 
   return recs;
 }
 
-/**
- * Generate life pool recommendations
- */
 function generateLifePoolRecommendations(analysis: LifePoolAnalysis): Recommendation[] {
   const recs: Recommendation[] = [];
-
   if (analysis.status === 'critical' || analysis.status === 'low') {
-    const priority = analysis.status === 'critical' ? 'critical' : 'high';
-
     recs.push({
-      priority,
+      priority: analysis.status === 'critical' ? 'critical' : 'high',
       category: 'life',
       issue: `Total Life/ES: ${analysis.total.toLocaleString()} (${analysis.status})`,
       solutions: [
@@ -388,30 +492,53 @@ function generateLifePoolRecommendations(analysis: LifePoolAnalysis): Recommenda
       ],
     });
   }
-
   return recs;
 }
 
-/**
- * Generate mitigation recommendations
- */
+function generateAvoidanceRecommendations(analysis: AvoidanceAnalysis): Recommendation[] {
+  const recs: Recommendation[] = [];
+  if (!analysis.hasSignificantAvoidance) {
+    recs.push({
+      priority: 'medium',
+      category: 'avoidance',
+      issue: 'No significant avoidance layer (no evasion, spell suppression, dodge, or block)',
+      solutions: [
+        'Evasion: equip evasion-based armour and run Grace aura',
+        'Spell Suppression: 50% suppression halves spell damage taken — available on tree (Shadow/Ranger side)',
+        'Block: use a shield or staff and invest in block nodes',
+        'Dodge: Acrobatics keystone gives 30% attack/spell dodge (but disables block)',
+      ],
+      impact: 'Without avoidance, every hit lands at full effect — requires pure mitigation + recovery to survive',
+    });
+  } else if (analysis.spellSuppression > 0 && analysis.spellSuppression < 50) {
+    recs.push({
+      priority: 'low',
+      category: 'avoidance',
+      issue: `Spell suppression is ${analysis.spellSuppression}% — not at 50% cap`,
+      solutions: [
+        'Cap spell suppression at 50% for full benefit',
+        'Additional suppression nodes or gear can reach the cap',
+      ],
+    });
+  }
+  return recs;
+}
+
 function generateMitigationRecommendations(
   analysis: MitigationAnalysis,
   stats: Record<string, any>
 ): Recommendation[] {
   const recs: Recommendation[] = [];
-
   if (analysis.overall === 'none' || analysis.overall === 'poor') {
     recs.push({
       priority: 'high',
       category: 'mitigation',
       issue: 'No meaningful physical damage mitigation',
       solutions: [
-        'Consider running Determination (armour) or Grace (evasion) aura',
+        'Run Determination (armour) or Grace (evasion) aura',
         'Look for armour/evasion on gear',
-        'Allocate defensive nodes on tree',
+        'Endurance charges provide flat physical mitigation (4% per charge)',
         'Consider block if using shield or staff',
-        'Endurance charges provide physical mitigation',
       ],
       impact: 'No mitigation = taking full physical damage from hits',
     });
@@ -419,7 +546,7 @@ function generateMitigationRecommendations(
     recs.push({
       priority: 'medium',
       category: 'mitigation',
-      issue: 'Physical mitigation is present but could be improved',
+      issue: 'Physical mitigation could be improved',
       solutions: [
         'Stack more of your chosen defense (armour, evasion, or block)',
         'Consider hybrid defenses (e.g., armour + block)',
@@ -427,56 +554,50 @@ function generateMitigationRecommendations(
       ],
     });
   }
-
   return recs;
 }
 
-/**
- * Generate sustain recommendations
- */
 function generateSustainRecommendations(analysis: SustainAnalysis): Recommendation[] {
   const recs: Recommendation[] = [];
-
   if (analysis.overall === 'poor') {
     recs.push({
       priority: 'medium',
       category: 'sustain',
-      issue: 'No sustain mechanism (regen, leech, recharge)',
+      issue: 'No sustain mechanism (no regen, leech, or recharge)',
       solutions: [
-        'Life builds: Allocate regen nodes or get life leech',
-        'ES builds: Ensure ES recharge is working (avoid constant hits)',
-        'Consider life/mana gain on hit for fast-hitting builds',
-        'Flasks help but not a complete solution',
+        'Life builds: Allocate regen nodes (Vitality aura, life regen notables)',
+        'Add life leech via skill gems (Warlord\'s Mark, leech support) or tree',
+        'ES builds: Ensure ES recharge is working (avoid constant hits or use Wicked Ward)',
+        'Gain on hit provides reliable recovery for fast-hitting builds',
+        'Flasks help but are not a complete sustain solution for endgame bossing',
       ],
-      impact: 'Without sustain, you rely entirely on flasks for recovery',
+      impact: 'Without sustain, chip damage and DoTs are lethal; flask reliance fails on "no regen" maps',
     });
   }
-
   return recs;
 }
 
-/**
- * Calculate overall defensive score
- */
 function calculateOverallScore(
   resistances: ResistanceAnalysis,
   lifePool: LifePoolAnalysis,
   mitigation: MitigationAnalysis,
-  sustain: SustainAnalysis
+  sustain: SustainAnalysis,
+  defensiveLayerCount: number
 ): DefensiveAnalysis['overallScore'] {
-  // Critical issues = critical score
   if (!resistances.allCapped || lifePool.status === 'critical') {
     return 'critical';
   }
 
-  // Count issues
   let issues = 0;
   if (lifePool.status === 'low') issues += 2;
   if (lifePool.status === 'adequate') issues += 1;
   if (mitigation.overall === 'none' || mitigation.overall === 'poor') issues += 2;
   if (mitigation.overall === 'fair') issues += 1;
-  if (sustain.overall === 'poor') issues += 1;
+  if (sustain.overall === 'poor') issues += 2;
+  if (sustain.overall === 'adequate') issues += 1;
   if (resistances.chaos.status === 'dangerous') issues += 1;
+  if (defensiveLayerCount < 2) issues += 2;
+  if (defensiveLayerCount < 3) issues += 1;
 
   if (issues === 0) return 'excellent';
   if (issues <= 2) return 'good';
@@ -490,15 +611,22 @@ function calculateOverallScore(
 export function formatDefensiveAnalysis(analysis: DefensiveAnalysis): string {
   let output = '=== Defensive Analysis ===\n\n';
 
-  // Overall score
-  const scoreEmoji = {
+  const scoreEmoji: Record<string, string> = {
     excellent: '✅',
     good: '✓',
     fair: '⚠️',
     poor: '⚠️',
     critical: '🚨',
   };
-  output += `Overall: ${scoreEmoji[analysis.overallScore]} ${analysis.overallScore.toUpperCase()}\n\n`;
+  output += `Overall: ${scoreEmoji[analysis.overallScore]} ${analysis.overallScore.toUpperCase()}\n`;
+  output += `EHP: ${analysis.lifePool.ehp.toLocaleString()} (effective HP including mitigation)\n\n`;
+
+  // Defensive Layers summary
+  output += `**Defensive Layers: ${analysis.defensiveLayerCount}/3**\n`;
+  for (const line of analysis.defensiveLayerSummary) {
+    output += `  ${line}\n`;
+  }
+  output += '\n';
 
   // Resistances
   output += '**Resistances:**\n';
@@ -516,21 +644,52 @@ export function formatDefensiveAnalysis(analysis: DefensiveAnalysis): string {
   }
   output += `Total: ${analysis.lifePool.total.toLocaleString()} (${analysis.lifePool.status})\n\n`;
 
+  // Avoidance
+  output += '**Avoidance Layer:**\n';
+  if (analysis.avoidance.spellSuppression > 0) {
+    const suppIcon = analysis.avoidance.spellSuppression >= 50 ? '✓' : '⚠';
+    output += `${suppIcon} Spell Suppression: ${analysis.avoidance.spellSuppression}%${analysis.avoidance.spellSuppression >= 50 ? ' (capped)' : ' (below 50% cap)'}\n`;
+  }
+  if (analysis.avoidance.estimatedEvadeChance > 0) {
+    output += `  Evasion: ${analysis.avoidance.evasionRating.toLocaleString()} (~${analysis.avoidance.estimatedEvadeChance}% evade)\n`;
+  }
+  if (analysis.avoidance.dodge > 0) {
+    output += `  Dodge: ${analysis.avoidance.dodge}%\n`;
+  }
+  if (analysis.avoidance.spellDodge > 0) {
+    output += `  Spell Dodge: ${analysis.avoidance.spellDodge}%\n`;
+  }
+  if (analysis.avoidance.block > 0) {
+    output += `  Block: ${analysis.avoidance.block}%\n`;
+  }
+  if (!analysis.avoidance.hasSignificantAvoidance) {
+    output += `  ⚠ No significant avoidance — all hits land at full effect\n`;
+  }
+  output += '\n';
+
   // Mitigation
-  output += '**Physical Mitigation:**\n';
-  output += `Armour: ${analysis.mitigation.armour.value.toLocaleString()} - ${analysis.mitigation.armour.effectiveness}\n`;
-  output += `Evasion: ${analysis.mitigation.evasion.value.toLocaleString()} - ${analysis.mitigation.evasion.effectiveness}\n`;
-  output += `Block: ${analysis.mitigation.block.value}% - ${analysis.mitigation.block.effectiveness}\n`;
+  output += '**Mitigation Layer:**\n';
+  output += `Armour: ${analysis.mitigation.armour.value.toLocaleString()} — ${analysis.mitigation.armour.effectiveness}\n`;
+  if (analysis.mitigation.physicalDamageReduction > 0) {
+    output += `Physical Damage Reduction: ${analysis.mitigation.physicalDamageReduction}%\n`;
+  }
+  if (analysis.mitigation.enduranceCharges > 0) {
+    output += `Endurance Charges: ${analysis.mitigation.enduranceCharges} (${analysis.mitigation.enduranceCharges * 4}% phys reduction)\n`;
+  }
+  output += `Block: ${analysis.mitigation.block.value}% — ${analysis.mitigation.block.effectiveness}\n`;
   if (analysis.mitigation.spellBlock.value > 0) {
-    output += `Spell Block: ${analysis.mitigation.spellBlock.value}% - ${analysis.mitigation.spellBlock.effectiveness}\n`;
+    output += `Spell Block: ${analysis.mitigation.spellBlock.value}% — ${analysis.mitigation.spellBlock.effectiveness}\n`;
   }
   output += `Overall: ${analysis.mitigation.overall}\n\n`;
 
-  // Sustain
-  output += '**Sustain:**\n';
-  output += `Life Regen: ${analysis.sustain.lifeRegen.value.toFixed(1)}/sec (${analysis.sustain.lifeRegen.percentOfMax.toFixed(1)}% of max) - ${analysis.sustain.lifeRegen.status}\n`;
+  // Recovery (Sustain)
+  output += '**Recovery Layer:**\n';
+  output += `Life Regen: ${analysis.sustain.lifeRegen.value.toFixed(1)}/s (${analysis.sustain.lifeRegen.percentOfMax.toFixed(1)}% of max) — ${analysis.sustain.lifeRegen.status}\n`;
+  if (analysis.sustain.hasLeech) {
+    output += `Life Leech: active\n`;
+  }
   if (analysis.sustain.esRecharge.value > 0) {
-    output += `ES Recharge: ${analysis.sustain.esRecharge.value}/sec - ${analysis.sustain.esRecharge.status}\n`;
+    output += `ES Recharge: ${analysis.sustain.esRecharge.value}/s — ${analysis.sustain.esRecharge.status}\n`;
   }
   output += `Overall: ${analysis.sustain.overall}\n\n`;
 
@@ -539,13 +698,12 @@ export function formatDefensiveAnalysis(analysis: DefensiveAnalysis): string {
     output += '**Recommendations:**\n\n';
     for (let i = 0; i < analysis.recommendations.length; i++) {
       const rec = analysis.recommendations[i];
-      const priorityIcon = {
+      const priorityIcon: Record<string, string> = {
         critical: '🚨',
         high: '⚠️',
         medium: '○',
         low: '·',
       };
-
       output += `${i + 1}. ${priorityIcon[rec.priority]} [${rec.priority.toUpperCase()}] ${rec.issue}\n`;
       for (const solution of rec.solutions) {
         output += `   → ${solution}\n`;

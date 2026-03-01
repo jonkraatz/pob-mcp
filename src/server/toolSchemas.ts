@@ -338,6 +338,14 @@ export function getLuaToolSchemas(): any[] {
             items: { type: "string" },
             description: "Array of node IDs to allocate",
           },
+          classId: {
+            type: "number",
+            description: "Class ID (0=Scion, 1=Marauder, 2=Ranger, 3=Witch, 4=Duelist, 5=Templar, 6=Shadow). If omitted, preserves current class.",
+          },
+          ascendClassId: {
+            type: "number",
+            description: "Ascendancy class ID (1-3, class-specific). For Witch: 1=Occultist, 2=Elementalist, 3=Necromancer. If omitted, preserves current ascendancy.",
+          },
         },
         required: ["nodes"],
       },
@@ -625,7 +633,7 @@ export function getOptimizationToolSchemas(): any[] {
   return [
     {
       name: "analyze_defenses",
-      description: "Analyze defensive layers and provide recommendations for improving survivability",
+      description: "Analyze defensive layers (avoidance / mitigation / recovery) and provide recommendations. Evaluates EHP, spell suppression, evasion, block, armour/PDR, life regen, and leech. An exceptional build has all 3 layers active.",
       inputSchema: {
         type: "object",
         properties: {
@@ -701,7 +709,7 @@ export function getOptimizationToolSchemas(): any[] {
     },
     {
       name: "optimize_skill_links",
-      description: "Analyze skill gem setups and suggest optimal support gems",
+      description: "Analyze skill gem setups for 'more' multipliers, penetration, and support gem synergies. Flags missing multiplicative damage supports and suggests clear-speed vs bossing balance.",
       inputSchema: {
         type: "object",
         properties: {
@@ -811,7 +819,7 @@ export function getValidationToolSchemas(): any[] {
   return [
     {
       name: "validate_build",
-      description: "Comprehensive build validation - checks resistances, defenses, mana, accuracy, and immunities. Provides prioritized recommendations with severity levels (critical/warning/info).",
+      description: "Comprehensive build validation against the exceptional-build checklist: resistances, life pool, defensive layer count (avoidance/mitigation/recovery), mana sustain, accuracy, flask immunities, and damage scaling (more multipliers, penetration). Provides prioritized recommendations with severity levels (critical/warning/info).",
       inputSchema: {
         type: "object",
         properties: {

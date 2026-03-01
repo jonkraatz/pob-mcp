@@ -274,11 +274,7 @@ export async function handleLuaGetTree(context: LuaHandlerContext) {
 
       if (tree.nodes && Array.isArray(tree.nodes)) {
         text += `\nAllocated Nodes: ${tree.nodes.length} nodes\n`;
-        text += `Node IDs: ${tree.nodes.slice(0, 20).join(', ')}`;
-        if (tree.nodes.length > 20) {
-          text += ` ... and ${tree.nodes.length - 20} more`;
-        }
-        text += '\n';
+        text += `Node IDs: ${tree.nodes.join(', ')}\n`;
       }
 
       if (tree.masteryEffects && typeof tree.masteryEffects === 'object') {

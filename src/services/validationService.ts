@@ -26,6 +26,8 @@ export class ValidationService {
     this.validateMana(stats, build, criticalIssues, warnings, recommendations);
     this.validateAccuracy(stats, build, criticalIssues, warnings);
     this.validateImmunities(flaskAnalysis, criticalIssues, warnings, recommendations);
+    this.validateDefensiveLayers(stats, warnings, recommendations);
+    this.validateDamageScaling(build, recommendations);
 
     // Calculate overall score
     const overallScore = this.calculateScore(criticalIssues, warnings, recommendations);
@@ -385,6 +387,170 @@ export class ValidationService {
         ],
         location: 'Flasks',
       });
+    }
+  }
+
+  /**
+   * Check that the build has at least 2 of 3 defensive layers:
+   *   Avoidance (evasion, suppression, dodge, block)
+   *   Mitigation (armour/PDR, endurance charges)
+   *   Recovery (regen, leech)
+   */
+  private validateDefensiveLayers(
+    stats: any,
+    warnings: ValidationIssue[],
+    recommendations: ValidationIssue[]
+  ): void {
+    const getS = (key: string): number =>
+      typeof stats.get === 'function' ? (stats.get(key) || 0) : (stats[key] || 0);
+
+    const evasion = getS('Evasion');
+    const spellSuppression = getS('SpellSuppressionChance');
+    const dodge = getS('DodgeChance') || getS('AttackDodgeChance');
+    const block = getS('BlockChance');
+    const armour = getS('Armour');
+    const pdr = getS('PhysicalDamageReduction');
+    const enduranceCharges = getS('EnduranceChargesMax');
+    const lifeRegen = getS('LifeRegen');
+    const life = getS('Life') || 1;
+    const lifeRegenPct = (lifeRegen / life) * 100;
+    const esRecharge = getS('ESRecharge');
+    const lifeLeech = getS('LifeLeechGainRate');
+
+    const hasAvoidance = spellSuppression >= 50 || evasion >= 10000 || dodge >= 20 || block >= 20;
+    const hasMitigation = armour >= 10000 || pdr >= 20 || enduranceCharges >= 2;
+    const hasRecovery = lifeRegenPct >= 1 || esRecharge >= 200 || lifeLeech > 0;
+
+    const layerCount = [hasAvoidance, hasMitigation, hasRecovery].filter(Boolean).length;
+
+    if (layerCount < 2) {
+      warnings.push({
+        severity: 'warning',
+        category: 'defenses',
+        title: `Only ${layerCount}/3 Defensive Layers Active`,
+        description:
+          'Exceptional builds layer avoidance + mitigation + recovery. ' +
+          `Currently active: ${[
+            hasAvoidance ? 'avoidance' : null,
+            hasMitigation ? 'mitigation' : null,
+            hasRecovery ? 'recovery' : null,
+          ].filter(Boolean).join(', ') || 'none'}. ` +
+          'A build relying on a single layer will die when that layer is bypassed.',
+        suggestions: [
+          !hasAvoidance ? 'Avoidance: evasion (Grace aura), spell suppression (50%), dodge (Acrobatics), or block (shield)' : 'Avoidance: ✓ active',
+          !hasMitigation ? 'Mitigation: armour (Determination aura), endurance charges, or high PDR' : 'Mitigation: ✓ active',
+          !hasRecovery ? 'Recovery: life regen nodes, life leech, or gain-on-hit' : 'Recovery: ✓ active',
+        ].filter((s) => !s.endsWith('✓ active')),
+        location: 'Gear & Tree',
+      });
+    } else if (layerCount === 2) {
+      recommendations.push({
+        severity: 'info',
+        category: 'defenses',
+        title: '2/3 Defensive Layers Active',
+        description:
+          `Good — you have ${[
+            hasAvoidance ? 'avoidance' : null,
+            hasMitigation ? 'mitigation' : null,
+            hasRecovery ? 'recovery' : null,
+          ].filter(Boolean).join(' + ')}. ` +
+          'Adding the third layer would make the build significantly more resilient.',
+        suggestions: [
+          !hasAvoidance ? 'Missing avoidance: consider evasion, spell suppression, dodge, or block' : '',
+          !hasMitigation ? 'Missing mitigation: consider armour, endurance charges, or PDR' : '',
+          !hasRecovery ? 'Missing recovery: consider life regen, leech, or gain-on-hit' : '',
+        ].filter(Boolean),
+        location: 'Gear & Tree',
+      });
+    }
+  }
+
+  /**
+   * Check damage scaling quality (for informational purposes).
+   * Flags builds that likely rely only on "increased" modifiers with no "more" multipliers.
+   */
+  private validateDamageScaling(
+    build: PoBBuild,
+    recommendations: ValidationIssue[]
+  ): void {
+    if (!build.Skills?.SkillSet) return;
+
+    const skillSets = Array.isArray(build.Skills.SkillSet)
+      ? build.Skills.SkillSet
+      : [build.Skills.SkillSet];
+
+    // Check first skill set for main skill support gems
+    for (const skillSet of skillSets) {
+      const skillArray = Array.isArray(skillSet.Skill)
+        ? skillSet.Skill
+        : skillSet.Skill ? [skillSet.Skill] : [];
+
+      if (skillArray.length === 0) continue;
+
+      // Look at the first (assumed main) skill
+      const mainSkill = skillArray[0];
+      const gems = Array.isArray(mainSkill.Gem) ? mainSkill.Gem : mainSkill.Gem ? [mainSkill.Gem] : [];
+      const supportNames = gems
+        .filter((g: any) => g.name?.toLowerCase().includes('support'))
+        .map((g: any) => (g.name || '').toLowerCase());
+
+      if (supportNames.length < 2) return; // Not enough gems to evaluate
+
+      const moreMultiplierGems = new Set([
+        'controlled destruction', 'elemental focus', 'multistrike', 'spell echo',
+        'swift affliction', 'efficacy', 'minion damage', 'concentrated effect',
+        'brutality', 'deadly ailments', 'vile toxins', 'cruelty', 'void manipulation',
+        'impale', 'melee physical damage', 'close combat',
+      ]);
+      const hasPenetration = supportNames.some((n: string) =>
+        n.includes('penetration') || n.includes('combustion')
+      );
+      const moreMultiplierCount = supportNames.filter((n: string) =>
+        [...moreMultiplierGems].some((k) => n.includes(k))
+      ).length;
+
+      if (moreMultiplierCount === 0 && supportNames.length >= 3) {
+        recommendations.push({
+          severity: 'info',
+          category: 'defenses', // reusing category for now
+          title: 'No "More" Multiplier Supports Detected',
+          description:
+            'Main skill appears to use only "increased" damage supports. ' +
+            '"More" multipliers (Controlled Destruction, Elemental Focus, Multistrike, etc.) ' +
+            'are multiplicative and are the primary way to scale DPS in PoE.',
+          suggestions: [
+            'Replace an "increased" support with a "more" multiplier',
+            'Spell builds: Controlled Destruction, Elemental Focus, Spell Echo',
+            'Attack builds: Multistrike, Brutality, Impale, Close Combat',
+            'DoT builds: Efficacy, Swift Affliction, Deadly Ailments',
+            'Minion builds: Minion Damage, Feeding Frenzy',
+          ],
+          location: 'Skills',
+        });
+      }
+
+      if (!hasPenetration && supportNames.length >= 4) {
+        const isElemental = supportNames.some((n: string) =>
+          n.includes('fire') || n.includes('cold') || n.includes('lightning') || n.includes('elemental')
+        );
+        if (isElemental) {
+          recommendations.push({
+            severity: 'info',
+            category: 'defenses',
+            title: 'No Penetration Support on Elemental Skill',
+            description:
+              'Endgame bosses have 40% elemental resistance. A penetration support can add ~25–35% effective DPS vs these targets.',
+            suggestions: [
+              'Add Fire/Cold/Lightning Penetration Support to main skill',
+              'Combustion Support reduces enemy fire resistance on ignite',
+              'Awakened versions provide even more penetration',
+            ],
+            location: 'Skills',
+          });
+        }
+      }
+
+      return; // Only check first skill group
     }
   }
 

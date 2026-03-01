@@ -23,7 +23,7 @@ export interface SkillGroup {
 }
 
 export interface SkillLinkIssue {
-  type: 'missing_link' | 'suboptimal_gem' | 'low_level' | 'no_quality' | 'link_order' | 'wrong_support';
+  type: 'missing_link' | 'suboptimal_gem' | 'low_level' | 'no_quality' | 'link_order' | 'wrong_support' | 'no_more_multiplier' | 'no_penetration';
   severity: 'high' | 'medium' | 'low';
   message: string;
   suggestion: string;
@@ -33,6 +33,8 @@ export interface SkillGroupAnalysis {
   group: SkillGroup;
   isValid: boolean;
   linkCount: number;
+  moreMultiplierCount: number;
+  hasPenetration: boolean;
   issues: SkillLinkIssue[];
   suggestions: string[];
   expectedDamageBoost?: string;
@@ -120,6 +122,95 @@ const SUPPORT_RECOMMENDATIONS: Record<string, string[]> = {
 };
 
 /**
+ * Support gems that provide multiplicative ("more") damage bonuses.
+ * These are the primary way to scale DPS — far stronger per slot than "increased" supports.
+ * An exceptional main skill should have at least 2–3 "more" multipliers in its 6-link.
+ */
+const MORE_MULTIPLIER_GEMS = new Set([
+  'controlled destruction support',
+  'elemental focus support',
+  'multistrike support',
+  'spell echo support',
+  'swift affliction support',
+  'efficacy support',
+  'minion damage support',
+  'concentrated effect support',
+  'brutality support',
+  'deadly ailments support',
+  'vile toxins support',
+  'impale support',
+  'melee physical damage support',
+  'added fire damage support',
+  'close combat support',
+  'increased critical damage support',
+  'cruelty support',
+  'void manipulation support',
+  'hypothermia support',
+  'trap and mine damage support',
+  'multiple totems support',
+  'awakened controlled destruction support',
+  'awakened elemental focus support',
+  'awakened spell echo support',
+  'awakened brutality support',
+  'awakened swift affliction support',
+  'awakened deadly ailments support',
+  'awakened void manipulation support',
+  'awakened minion damage support',
+  'awakened added fire damage support',
+  'awakened melee physical damage support',
+]);
+
+/**
+ * Support gems that reduce enemy resistances or provide damage penetration.
+ * Penetration is critical against high-resistance bosses (Shaper, Elder, Ubers).
+ * An elemental skill without penetration loses ~33-50% effective DPS vs endgame bosses.
+ */
+const PENETRATION_GEMS = new Set([
+  'fire penetration support',
+  'cold penetration support',
+  'lightning penetration support',
+  'elemental penetration support',
+  'combustion support',  // reduces enemy fire resist on ignite
+  'hypothermia support', // cold exposure
+  'storm brand',         // lightning exposure via some interactions
+  'void manipulation support',
+  'awakened fire penetration support',
+  'awakened cold penetration support',
+  'awakened lightning penetration support',
+  'awakened void manipulation support',
+]);
+
+/**
+ * Support gems primarily useful for clear speed (AoE, projectile proliferation).
+ */
+const CLEAR_SPEED_GEMS = new Set([
+  'greater multiple projectiles support',
+  'awakened greater multiple projectiles support',
+  'chain support',
+  'fork support',
+  'awakened fork support',
+  'pierce support',
+  'volley support',
+  'lesser multiple projectiles support',
+  'spell cascade support',
+  'awakened spell cascade support',
+  'reap support',
+]);
+
+/**
+ * Support gems primarily useful for single-target / bossing DPS.
+ */
+const BOSSING_GEMS = new Set([
+  'concentrated effect support',
+  'awakened concentrated effect support',
+  'barrage support',
+  'awakened added fire damage support',
+  'awakened deadly ailments support',
+  'awakened vile toxins support',
+  'empower support',
+]);
+
+/**
  * Detect skill type from gem name
  */
 export function detectSkillType(gemName: string): string[] {
@@ -204,6 +295,8 @@ export function analyzeSkillGroup(
     group,
     isValid: true,
     linkCount: group.gems.length,
+    moreMultiplierCount: 0,
+    hasPenetration: false,
     issues: [],
     suggestions: [],
   };
@@ -235,6 +328,50 @@ export function analyzeSkillGroup(
   const activeSkillName = activeSkill.name;
   const skillTypes = detectSkillType(activeSkillName);
   const supports = group.gems.filter((g) => isSupportGem(g.name));
+  const supportNames = supports.map((s) => s.name.toLowerCase());
+
+  // Count "more" multiplier supports
+  const moreMultiplierCount = supports.filter((s) => MORE_MULTIPLIER_GEMS.has(s.name.toLowerCase())).length;
+  analysis.moreMultiplierCount = moreMultiplierCount;
+
+  // Detect penetration
+  const hasPenetration = supports.some((s) => PENETRATION_GEMS.has(s.name.toLowerCase()));
+  analysis.hasPenetration = hasPenetration;
+
+  // Detect clear speed vs bossing balance
+  const hasClearGem = supports.some((s) => CLEAR_SPEED_GEMS.has(s.name.toLowerCase()));
+  const hasBossingGem = supports.some((s) => BOSSING_GEMS.has(s.name.toLowerCase()));
+
+  // Flag missing "more" multipliers on main skill — this is the #1 DPS lever in PoE
+  if (group.isMainSkill && supports.length >= 2 && moreMultiplierCount === 0) {
+    analysis.issues.push({
+      type: 'no_more_multiplier',
+      severity: 'high',
+      message: 'No "more" damage multiplier supports on main skill',
+      suggestion:
+        'Add at least 1–2 "more" multipliers: Controlled Destruction, Elemental Focus, Spell Echo, Multistrike, Swift Affliction, Efficacy, Minion Damage, etc.',
+    });
+  } else if (group.isMainSkill && analysis.linkCount >= 5 && moreMultiplierCount < 2) {
+    analysis.issues.push({
+      type: 'no_more_multiplier',
+      severity: 'medium',
+      message: `Only ${moreMultiplierCount} "more" multiplier support on a ${analysis.linkCount}-link`,
+      suggestion:
+        `A ${analysis.linkCount}-link can support 2–3 "more" multiplier supports. Each one multiplicatively scales total damage.`,
+    });
+  }
+
+  // Flag no penetration for elemental builds (critical vs endgame bosses with 40%+ resists)
+  const isElemental = skillTypes.some((t) => ['fire', 'cold', 'lightning'].includes(t));
+  if (group.isMainSkill && isElemental && !hasPenetration && supports.length >= 3) {
+    analysis.issues.push({
+      type: 'no_penetration',
+      severity: 'medium',
+      message: 'No penetration support on elemental main skill',
+      suggestion:
+        'Fire/Cold/Lightning Penetration Support is a large effective DPS gain against bosses with 40%+ resists. Combustion Support also reduces enemy fire resistance.',
+    });
+  }
 
   // Check link count
   if (group.isMainSkill && analysis.linkCount < 6) {
@@ -273,7 +410,7 @@ export function analyzeSkillGroup(
   }
 
   // Suggest support gems based on skill type
-  const supportNames = supports.map((s) => s.name.toLowerCase());
+  // (supportNames is already defined above)
 
   if (skillTypes.includes('attack')) {
     if (!supportNames.some((s) => s.includes('multistrike') || s.includes('faster attacks'))) {
@@ -326,6 +463,19 @@ export function analyzeSkillGroup(
     });
   }
 
+  // Clear speed vs bossing balance note (for main 6-link only)
+  if (group.isMainSkill && analysis.linkCount >= 5) {
+    if (hasClearGem && !hasBossingGem) {
+      analysis.suggestions.push(
+        'Setup is optimised for clear speed. For bossing swap a clear gem (GMP/Chain) for Concentrated Effect or a "more" multiplier.'
+      );
+    } else if (!hasClearGem && !hasBossingGem) {
+      analysis.suggestions.push(
+        'Consider whether you need a clear speed gem (GMP/Chain for projectiles, Spell Cascade for spells) or a bossing gem (Concentrated Effect, Empower).'
+      );
+    }
+  }
+
   return analysis;
 }
 
@@ -351,12 +501,25 @@ export function analyzeSkillSetup(
   const mainSkill = groupAnalyses.find((g) => g.group.isMainSkill);
   if (!mainSkill) {
     generalSuggestions.push('⚠️ No main skill selected - set a main skill for accurate DPS calculations');
-  } else if (mainSkill.linkCount < 6) {
-    generalSuggestions.push(
-      `Main skill has ${mainSkill.linkCount} links - upgrade to 6-link for ~${
-        Math.pow(1.4, 6 - mainSkill.linkCount) * 100 - 100
-      }% more damage`
-    );
+  } else {
+    if (mainSkill.linkCount < 6) {
+      generalSuggestions.push(
+        `Main skill has ${mainSkill.linkCount} links — upgrade to 6-link for maximum damage output`
+      );
+    }
+    if (mainSkill.moreMultiplierCount < 2) {
+      generalSuggestions.push(
+        `Main skill has only ${mainSkill.moreMultiplierCount} "more" multiplier support(s). ` +
+        `"More" multipliers (Controlled Destruction, Elemental Focus, Multistrike, etc.) are multiplicative — ` +
+        `a second "more" multiplier at ×1.4 added to an existing ×1.4 gives ×1.96 total, which is far stronger than any "increased" node.`
+      );
+    }
+    if (!mainSkill.hasPenetration) {
+      generalSuggestions.push(
+        `Main skill has no penetration support. Against endgame bosses (40% resists), ` +
+        `penetration typically accounts for a 20–35% effective DPS increase.`
+      );
+    }
   }
 
   // Check for auras
@@ -408,6 +571,9 @@ export function formatSkillOptimization(result: SkillOptimizationResult): string
       output += `  Label: ${group.label}\n`;
     }
     output += `  Links: ${analysis.linkCount}\n`;
+    if (group.isMainSkill) {
+      output += `  "More" multipliers: ${analysis.moreMultiplierCount} | Penetration: ${analysis.hasPenetration ? 'yes' : 'no'}\n`;
+    }
     output += `  Gems: ${group.gems.map((g) => g.name).join(', ')}\n`;
 
     if (analysis.issues.length > 0) {

@@ -179,7 +179,14 @@ export async function handleGetSkillSetup(context: ItemSkillHandlerContext) {
           text += `  Main Active Skill Index: ${group.mainActiveSkill}\n`;
         }
         if (group.skills && group.skills.length > 0) {
-          text += `  Skills: ${group.skills.join(', ')}\n`;
+          text += `  Active Skills: ${group.skills.join(', ')}\n`;
+        }
+        if (group.gems && group.gems.length > 0) {
+          text += `  Gems (${group.gems.length}):\n`;
+          for (const gem of group.gems) {
+            const lvlQual = `${gem.level}/${gem.quality}`;
+            text += `    ${gem.index}. ${gem.name} (${lvlQual})${gem.enabled === false ? ' [disabled]' : ''}\n`;
+          }
         }
         text += "\n";
       }
