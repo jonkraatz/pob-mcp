@@ -265,6 +265,20 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "lua_save_build",
+      description: "Save the currently loaded in-memory Lua bridge build to a file. Required before using file-based tools (validate_build, analyze_build, etc.) on an in-memory build.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          build_name: {
+            type: "string",
+            description: "Output filename (e.g., 'MyBuild.xml'). .xml extension added automatically if missing.",
+          },
+        },
+        required: ["build_name"],
+      },
+    },
+    {
       name: "lua_load_build",
       description: "Load a build file into the PoB calculation engine. Required before using other lua_* tools.",
       inputSchema: {

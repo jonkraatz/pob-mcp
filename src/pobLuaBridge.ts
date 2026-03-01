@@ -217,10 +217,16 @@ export class PoBLuaApiClient {
     return !!res.ok;
   }
 
-  async newBuild(): Promise<any> {
-    const res = await this.send({ action: "new_build" });
+  async newBuild(params?: { className?: string; ascendancy?: string }): Promise<any> {
+    const res = await this.send({ action: "new_build", params: params || {} });
     if (!res.ok) throw new Error(res.error || "new_build failed");
     return res;
+  }
+
+  async saveBuild(filePath: string): Promise<any> {
+    const res = await this.send({ action: "save_build", params: { path: filePath } });
+    if (!res.ok) throw new Error(res.error || "save_build failed");
+    return res.result;
   }
 
   async loadBuildXml(xml: string, name = "API Build"): Promise<any> {
@@ -471,10 +477,16 @@ export class PoBLuaTcpClient {
     return !!res.ok;
   }
 
-  async newBuild(): Promise<any> {
-    const res = await this.send({ action: "new_build" });
+  async newBuild(params?: { className?: string; ascendancy?: string }): Promise<any> {
+    const res = await this.send({ action: "new_build", params: params || {} });
     if (!res.ok) throw new Error(res.error || "new_build failed");
     return res;
+  }
+
+  async saveBuild(filePath: string): Promise<any> {
+    const res = await this.send({ action: "save_build", params: { path: filePath } });
+    if (!res.ok) throw new Error(res.error || "save_build failed");
+    return res.result;
   }
 
   async loadBuildXml(xml: string, name = "API Build"): Promise<any> {

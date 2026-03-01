@@ -44,7 +44,7 @@ export async function handleLuaStop(context: LuaHandlerContext) {
   };
 }
 
-export async function handleLuaNewBuild(context: LuaHandlerContext) {
+export async function handleLuaNewBuild(context: LuaHandlerContext, className?: string, ascendancy?: string) {
   try {
     await context.ensureLuaClient();
 
@@ -53,19 +53,51 @@ export async function handleLuaNewBuild(context: LuaHandlerContext) {
       throw new Error('Lua client not initialized');
     }
 
-    await luaClient.newBuild();
+    await luaClient.newBuild(className || ascendancy ? { className, ascendancy } : undefined);
 
+    const classDesc = className ? ` (${className}${ascendancy ? `/${ascendancy}` : ''})` : '';
     return {
       content: [
         {
           type: "text" as const,
-          text: "✅ New empty build created.",
+          text: `✅ New empty build created${classDesc}.`,
         },
       ],
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to create new build: ${errorMsg}`);
+  }
+}
+
+export async function handleLuaSaveBuild(context: LuaHandlerContext, buildName: string) {
+  try {
+    await context.ensureLuaClient();
+
+    const luaClient = context.getLuaClient();
+    if (!luaClient) {
+      throw new Error('Lua client not initialized');
+    }
+
+    if (!buildName || !buildName.trim()) {
+      throw new Error('build_name is required');
+    }
+
+    const fileName = buildName.endsWith('.xml') ? buildName : `${buildName}.xml`;
+    const filePath = path.join(context.pobDirectory, fileName);
+    const result = await luaClient.saveBuild(filePath);
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `✅ Build saved to "${fileName}" (${result?.size ?? '?'} bytes). File-based tools can now use this build.`,
+        },
+      ],
+    };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to save build: ${errorMsg}`);
   }
 }
 
@@ -129,7 +161,11 @@ export async function handleLuaGetStats(context: LuaHandlerContext, category?: s
         'WithPoisonDPS', 'IgniteDPS', 'BleedDPS', 'PoisonDPS', 'AverageDamage', 'AverageBurstDamage',
         'Speed', 'HitChance', 'CritChance', 'CritMultiplier', 'PreEffectiveCritChance',
         'EffectiveCritChance', 'MainHandAccuracy', 'OffHandAccuracy', 'ManaCost', 'ManaPerSecondCost',
-        'LifeCost', 'LifePerSecondCost', 'ESCost', 'ESPerSecondCost', 'RageCost'
+        'LifeCost', 'LifePerSecondCost', 'ESCost', 'ESPerSecondCost', 'RageCost',
+        // Minion stats (populated for summoner builds)
+        'MinionTotalDPS', 'MinionCombinedDPS', 'MinionAverageDamage', 'MinionSpeed',
+        'MinionLife', 'MinionArmour', 'MinionEnergyShield',
+        'MinionFireResist', 'MinionColdResist', 'MinionLightningResist', 'MinionChaosResist',
       ];
     } else if (category === 'defense') {
       fields = [
@@ -228,9 +264,9 @@ export async function handleLuaGetTree(context: LuaHandlerContext) {
     let text = "=== PoB Passive Tree ===\n\n";
 
     if (tree && typeof tree === 'object') {
-      text += `Tree Version: ${tree.treeVersion || 'Unknown'}\n`;
-      text += `Class ID: ${tree.classId || 'Unknown'}\n`;
-      text += `Ascendancy ID: ${tree.ascendClassId || 'Unknown'}\n`;
+      text += `Tree Version: ${tree.treeVersion ?? 'Unknown'}\n`;
+      text += `Class ID: ${tree.classId != null ? tree.classId : 'Unknown'}\n`;
+      text += `Ascendancy ID: ${tree.ascendClassId != null ? tree.ascendClassId : 'Unknown'}\n`;
 
       if (tree.secondaryAscendClassId) {
         text += `Secondary Ascendancy ID: ${tree.secondaryAscendClassId}\n`;
@@ -303,7 +339,14 @@ export async function handleLuaSetTree(context: LuaHandlerContext, args: any) {
       treeVersion,
     });
 
-    let text = `✅ Passive tree updated. Allocated ${args.nodes.length} nodes.`;
+    const actualCount = (tree && Array.isArray(tree.nodes)) ? tree.nodes.length : args.nodes.length;
+    const requested = args.nodes.length;
+    const dropped = requested - actualCount;
+    let text = `✅ Passive tree updated. Allocated ${actualCount} nodes.`;
+    if (dropped > 0) {
+      text += `\n⚠️  ${dropped} of ${requested} requested nodes were dropped (not connected to start or invalid IDs).`;
+      text += `\nTip: Ensure the class is set correctly and nodes form a valid connected path from the starting node.`;
+    }
 
     return {
       content: [
