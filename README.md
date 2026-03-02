@@ -1,6 +1,6 @@
 # Path of Building MCP Server
 
-An MCP (Model Context Protocol) server that enables Claude to analyze and work with Path of Building builds.
+An MCP (Model Context Protocol) server that enables Claude to analyze, modify, and optimize Path of Building builds using PoB's actual calculation engine.
 
 ---
 
@@ -8,105 +8,89 @@ An MCP (Model Context Protocol) server that enables Claude to analyze and work w
 
 ---
 
-## 🚀 Optimized for Claude Desktop
-
-This server is specifically optimized to prevent timeouts in Claude Desktop:
-- **Tool Gate System**: Prevents excessive tool chaining - 27 high-impact tools require explicit "continue" command
-- **Response Truncation**: Automatically limits responses to 8000 characters with helpful summaries
-- **Batch Operations**: Combines multiple operations (e.g., `setup_skill_with_gems`, `add_multiple_items`)
-- **Concise Responses**: Streamlined output focusing on actionable information
-
 ## Features
 
-### XML-Based Analysis (Always Available)
-- **List Builds**: Browse all your Path of Building builds
-- **Analyze Builds**: Extract detailed information from builds including stats, skills, items, and passive trees
-- **Compare Builds**: Side-by-side comparison of two builds
-- **Get Stats**: Quick access to build statistics
-- **File Watching**: Real-time monitoring of build changes with automatic cache invalidation
-- **Build Cache**: Intelligent caching for faster repeated analysis
+### Build Analysis (Always Available)
+- **List & Analyze Builds**: Browse builds and extract stats, skills, items, passive trees, and notes from XML
+- **Compare Builds**: Side-by-side build comparison
+- **File Watching**: Real-time detection of builds saved from PoB with automatic cache invalidation
+- **Tree Analysis**: Compare passive trees, find paths to nodes, discover nearby notables, what-if allocation testing
 
-### High-Fidelity Calculations (Lua Bridge - Optional)
-- **Live Stat Calculation**: Use PoB's actual calculation engine for accurate stats
-- **Tree Modification**: Add/remove passive nodes and see live stat updates
-- **Optimal Node Suggestions**: AI-powered recommendations for high-efficiency nodes based on goals (DPS, life, ES, defense, etc.)
-- **Tree Optimization**: Automatically optimize entire passive trees by intelligently adding and removing nodes
-- **Pathfinding**: Find shortest paths to target nodes with distance and cost analysis
-- **Nearby Node Discovery**: List reachable notables/keystones within specified distance using Dijkstra's algorithm
-- **What-If Analysis**: Preview stat changes before committing to tree modifications
-- **Tree Comparison**: Compare stat differences between different passive tree allocations
-- **Build Planning**: Get intelligent node recommendations for new builds
-- **Defensive Analysis**: Identify resist gaps, EHP issues, mitigation and sustain weaknesses with prioritized recommendations
-- **Item Analysis**: Analyze equipped gear and get upgrade recommendations based on build goals
-- **Skill Link Optimization**: Detect missing support gems, anti-synergies, and get gem recommendations
-- **Budget Build Creation**: Generate comprehensive build plans from requirements with skill links, gearing strategy, and passive tree priorities
-- **Item Management**: Add items from PoE text format, manage flasks, and test gear upgrades
-- **Skill Configuration**: View and modify skill setups, compare DPS between different socket groups
-- **Interactive Sessions**: Load builds and modify them programmatically with immediate stat recalculation
+### High-Fidelity Calculations (Lua Bridge)
+- **Live Stats**: Accurate stat calculation using PoB's own engine — identical to what PoB GUI shows
+- **Build Loading & Creation**: Load existing builds or create new ones from scratch by class/ascendancy
+- **Passive Tree Editing**: Set full tree allocation and see immediate stat recalculation
+- **Node Search**: Search the passive tree for nodes by name or stat text
+- **Character Level**: Set level and watch all stats update accordingly
 
-### Build Validation (Phase 7)
-- **Comprehensive Validation**: Check resistances, defenses, mana, accuracy, and immunities
-- **Severity Classification**: Critical issues, warnings, and recommendations
-- **Build Scoring**: Overall health score (0-10) based on issue severity
-- **Actionable Suggestions**: Specific fixes for each problem (gear, tree, flasks)
-- **Smart Context**: Different thresholds for life/ES builds, attack/spell builds, character level
+### Item & Skill Management (Lua Bridge)
+- **Items**: Add items from PoE clipboard text, view all equipped gear
+- **Flasks**: Toggle flasks active/inactive with immediate stat feedback
+- **Skills**: Full gem management — create socket groups, add/remove/level/quality gems
+- **Batch Operations**: `setup_skill_with_gems` and `add_multiple_items` for efficient workflows
 
-### Skill Gem Recommendations (Phase 11)
-- **Skill Analysis**: Evaluate current gem setup and detect build archetype
-- **Smart Suggestions**: AI-driven support gem recommendations with DPS estimates
-- **Archetype Detection**: Automatically classify builds (Elemental Bow Attack, Critical Spell, etc.)
-- **Quality Validation**: Check for missing gem quality, corruption opportunities, and awakened upgrades
-- **Budget Awareness**: League-start, mid-league, and endgame recommendations
+### Build Optimization (Lua Bridge)
+- **Defensive Analysis**: 3-layer framework (avoidance / mitigation / recovery) — evaluates EHP, spell suppression, armour/PDR, evasion, block, life regen, and leech
+- **Node Suggestions**: Archetype-aware suggestions by goal (damage, life, ES, defense, resist)
+- **Tree Optimization**: Recommend nodes within reach of the current allocation
+- **Item Upgrade Analysis**: Slot-by-slot upgrade recommendations based on live stats
+- **Skill Link Optimization**: Detect missing "more" multipliers, penetration gaps, anti-synergies
+- **Budget Build Creation**: Generate starter build plans with skill links, gearing strategy, and passive priorities
+
+### Build Validation
+- **Comprehensive Checks**: Resistances, life pool, defensive layers, mana, flask immunities, accuracy, damage scaling
+- **Severity Classification**: Critical / Warning / Info with actionable suggestions
+- **Dual Source**: Uses Lua bridge stats when available, falls back to XML parsing
+- **Overall Score**: 0–10 build health score
+
+### Configuration & Scenario Testing (Lua Bridge)
+- **Config State**: View bandit, pantheon, enemy settings
+- **Toggle Conditions**: Charges, buffs (Onslaught, Fortify, Leeching), boss mode
+- **Enemy Tuning**: Set enemy level, resistances, armour, evasion for boss DPS testing
+
+### Skill Gem Analysis
+- **Archetype Detection**: Classify builds (Elemental Bow Attack, Summoner, Critical Spell, etc.)
+- **Support Gem Recommendations**: Ranked suggestions with DPS estimates and cost context
+- **Quality Validation**: Identify missing quality, awakened upgrade paths, corruption targets
 - **Optimal Links**: Auto-generate best support gem combinations for 4/5/6-link setups
-- **Gem Database**: Curated database of support gems with synergies and anti-synergies
+- **Budget Tiers**: League-start, mid-league, and endgame recommendations
 
-### Configuration & Enemy Settings (Phase 9)
-- **View Configuration**: See current charge usage, enemy settings, and active conditions
-- **Modify Settings**: Toggle buffs, charges, and combat conditions
-- **Enemy Parameters**: Configure enemy level, resistances, armor, and evasion
-- **Scenario Testing**: Test DPS against bosses (Shaper, Maven, map bosses)
-- **Impact Analysis**: Before/after DPS comparison with change percentage
+### Build Export & Persistence
+- **Export**: Copy builds to XML files with optional notes
+- **Save Tree**: Write optimized passive tree back to an existing build file
+- **Snapshots**: Versioned build history with tags, stat metadata, and one-click rollback
 
-### Build Export & Persistence (Phase 8)
-- **Export Builds**: Create copies/variants of builds to XML files with optional notes
-- **Save Tree**: Update passive tree in existing builds without affecting gear or skills
-- **Snapshot Management**: Create versioned snapshots with metadata tracking stats and changes
-- **Snapshot History**: List all snapshots for a build with timestamps, tags, and stat comparisons
-- **Rollback Support**: Restore builds from snapshots with automatic backup of current state
+### Currency & Market Data (poe.ninja)
+- **Exchange Rates**: Real-time currency prices in Chaos Orb equivalent
+- **Arbitrage Detection**: Find profitable currency trading loops
+- **Trade Profit Calculator**: Evaluate custom trading chains
+
+### Trade API (Optional, `POE_TRADE_ENABLED=true`)
+- **Item Search**: Search trade with stat filters, price range, link count
+- **Price Checking**: Min/max/median/average from recent listings
+- **Upgrade Finder**: Identify best item upgrade candidates for your build
+- **Resistance Gear**: Find affordable gear to cap resistances
+- **Cluster Jewels**: Search and analyze cluster jewel setups
+- **Shopping List**: Generate a prioritized shopping list from build analysis
+
+---
 
 ## Installation
 
-1. Install dependencies:
 ```bash
 cd pob-mcp-server
 npm install
-```
-
-2. Build the TypeScript code:
-```bash
 npm run build
 ```
 
 ## Configuration
 
-### Basic Setup (XML Features Only)
-
-By default, the server looks for builds in:
-- macOS: `~/Path of Building/Builds`
-- Windows/Linux: `~/Documents/Path of Building/Builds`
-
-If your builds are in a different location (for example, `~/Documents/Path of Building/Builds` on some macOS setups), set `POB_DIRECTORY` explicitly.
-
-To use a custom directory, set the `POB_DIRECTORY` environment variable.
-
 ### Claude Desktop Configuration
-
-Add this to your Claude Desktop configuration file:
 
 **Mac**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
-#### Minimal Configuration (XML-only features)
+#### XML-Only (No Lua Bridge)
 ```json
 {
   "mcpServers": {
@@ -121,7 +105,7 @@ Add this to your Claude Desktop configuration file:
 }
 ```
 
-#### Full Configuration (Including Lua Bridge)
+#### Full Configuration (With Lua Bridge)
 ```json
 {
   "mcpServers": {
@@ -132,7 +116,7 @@ Add this to your Claude Desktop configuration file:
         "POB_DIRECTORY": "/path/to/your/Path of Building/Builds",
         "POB_LUA_ENABLED": "true",
         "POB_FORK_PATH": "/path/to/PathOfBuilding/src",
-        "POB_CMD": "luajit",
+        "POB_CMD": "/usr/local/bin/luajit",
         "POB_TIMEOUT_MS": "10000"
       }
     }
@@ -142,908 +126,24 @@ Add this to your Claude Desktop configuration file:
 
 ### Environment Variables
 
-#### Core Settings
-- `POB_DIRECTORY`: Path to your PoB builds directory (required)
-- `POB_LUA_ENABLED`: Set to `"true"` to enable Lua bridge features (default: `"false"`)
-
-#### Lua Bridge Settings (when POB_LUA_ENABLED=true)
-- `POB_FORK_PATH`: Path to PathOfBuilding/src directory (default: `~/Projects/PathOfBuilding/src`)
-- `POB_CMD`: LuaJIT command (default: `"luajit"`)
-- `POB_ARGS`: Lua script to run (default: `"HeadlessWrapper.lua"`)
-- `POB_TIMEOUT_MS`: Request timeout in milliseconds (default: `"10000"`)
-
-#### TCP Mode (For connecting to PoB GUI)
-- `POB_API_TCP`: Set to `"true"` to use TCP instead of stdio (default: `"false"`)
-- `POB_API_TCP_HOST`: TCP server host (default: `"127.0.0.1"`)
-- `POB_API_TCP_PORT`: TCP server port (default: `"31337"`)
-
-### Setting Up Lua Bridge (Optional)
-
-The Lua bridge enables high-fidelity stat calculations using PoB's actual calculation engine.
-
-#### Prerequisites
-1. **Install LuaJIT**:
-   ```bash
-   # macOS
-   brew install luajit
-
-   # Ubuntu/Debian
-   sudo apt-get install luajit
-
-   # Windows
-   # Download from https://luajit.org/ and add to PATH
-   ```
-
-2. **Clone PathOfBuilding**:
-   ```bash
-   git clone git@github.com:ianderse/PathOfBuilding.git
-   cd PathOfBuilding
-   git checkout api-stdio
-   # Note the path to the 'src' directory for POB_FORK_PATH
-   ```
-
-3. **Verify Installation**:
-   ```bash
-   # Test luajit is in PATH
-   luajit -v
-
-   # Test PoB fork structure
-   ls /path/to/pob-api/src/HeadlessWrapper.lua
-   ls /path/to/pob-api/src/Modules/
-   ```
-
-4. **Update Claude Desktop Config** with the full configuration shown above
-
-5. **Restart Claude Desktop** to apply changes
-
-## Usage
-
-The server provides 44 tools organized into functional categories. All tools are accessible through natural language conversation with Claude.
-
-### Tool Categories
-
-**XML-Based Tools (8 tools)** - Always available, no Lua bridge required:
-- Build listing and file watching
-- Build analysis and comparison
-- Stat extraction from XML
-- Raw XML access and tree data management
-
-**Lua Bridge Core Tools (9 tools)** - Require `POB_LUA_ENABLED=true`:
-- Bridge lifecycle management (start/stop)
-- Build loading into calculation engine
-- High-fidelity stat calculation
-- Passive tree viewing and modification
-- Configuration state viewing and modification
-- Enemy parameter configuration
-- Scenario testing (boss DPS, charge impact, etc.)
-
-**Tree Planning Tools (3 tools)** - Require Lua bridge:
-- Tree comparison between builds
-- What-if analysis for node changes
-- Build planning assistance
-
-**Item & Skill Tools (5 tools)** - Require Lua bridge:
-- Item management (add items, view equipment)
-- Flask activation control
-- Skill setup configuration
-
-**Build Optimization Tools (8 tools)** - Require Lua bridge:
-- Defensive analysis with recommendations
-- Intelligent node suggestions by efficiency
-- Full tree optimization with constraints
-- Pathfinding to target nodes
-- Nearby node discovery with reachability
-- Direct node allocation with stat calculations
-- Item upgrade recommendations
-- Skill link optimization
-- Budget build creation from requirements
-
-**Build Validation Tools (1 tool)** - Works with or without Lua bridge:
-- Comprehensive build validation (resistances, defenses, mana, accuracy, immunities)
-- Severity-based issue classification
-- Overall build health scoring
-- Actionable recommendations
-
-**Build Export & Persistence Tools (5 tools)** - Always available:
-- Export builds to XML files with optional notes
-- Update passive tree without affecting gear/skills
-- Create versioned snapshots with metadata
-- View snapshot history with stats
-- Rollback to previous snapshots
-
-**Skill Gem Analysis Tools (5 tools)** - Always available:
-- Analyze skill gem setups with archetype detection
-- Get intelligent support gem recommendations
-- Validate gem quality and suggest upgrades
-- Compare multiple gem configurations
-- Generate optimal support gem combinations
-
-## Available Tools
-
-### XML-Based Tools (Always Available)
-
-#### `list_builds`
-Lists all `.xml` files in your Path of Building directory.
-
-**Parameters**: None
-
-**Returns**: List of build filenames with subdirectories
-
-#### `analyze_build`
-Provides a comprehensive summary of a build including:
-- Character class and ascendancy
-- Level
-- Key statistics (Life, DPS, resistances, etc.)
-- Active skills and support gems
-- Equipped items
-- Build notes
-
-**Parameters**:
-- `build_name` (required): Name of the build file (e.g., "MyBuild.xml")
-
-**Returns**: Structured build analysis
-
-#### `compare_builds`
-Compares two builds side by side, highlighting differences in:
-- Class and ascendancy
-- Key statistics
-- Gear choices
-
-**Parameters**:
-- `build1_name` (required): First build filename
-- `build2_name` (required): Second build filename
-
-**Returns**: Side-by-side comparison
-
-#### `get_build_stats`
-Quickly retrieves all statistics from a build.
-
-**Parameters**:
-- `build_name` (required): Name of the build file
-
-**Returns**: All numerical stats from build XML
-
-#### `start_watching`
-Starts monitoring the builds directory for changes. When enabled:
-- Changes are detected within 2 seconds
-- Build cache is automatically invalidated
-- Recent changes are tracked
-
-**Parameters**: None
-
-**Returns**: Confirmation message
-
-#### `stop_watching`
-Stops monitoring the builds directory.
-
-**Parameters**: None
-
-**Returns**: Confirmation message
-
-#### `watch_status`
-Shows current file watching status, including:
-- Whether watching is enabled
-- Directory being monitored
-- Number of cached builds
-- Number of recent changes tracked
-
-**Parameters**: None
-
-**Returns**: Status information
-
-#### `get_recent_changes`
-Lists recently modified builds with timestamps. Useful for seeing what builds have been updated in PoB.
-
-**Parameters**: None
-
-**Returns**: List of changed builds with timestamps
-
-#### `refresh_tree_data`
-Refresh the cached passive tree data.
-
-**Parameters**:
-- `version` (optional): Specific tree version string (e.g., "3_26"). If omitted, clears all cached versions and refetches on demand.
-
-**Returns**: Confirmation message
-
-#### `get_build_xml`
-Return the raw XML content of a build file.
-
-**Parameters**:
-- `build_name` (required): Name of the build file (e.g., "MyBuild.xml")
-
-**Returns**: Raw XML content
-
-
-### Lua Bridge Tools (When POB_LUA_ENABLED=true)
-
-#### `lua_start`
-Initialize the PoB Lua bridge for high-fidelity calculations.
-
-**Parameters**: None
-
-**Returns**: Success message with mode info (stdio or TCP)
-
-**Example**: "Start the PoB Lua bridge"
-
-#### `lua_stop`
-Stop the PoB Lua bridge and clean up resources.
-
-**Parameters**: None
-
-**Returns**: Success message
-
-**Example**: "Stop the Lua bridge"
-
-#### `lua_load_build`
-Load a build XML into the PoB calculation engine.
-
-**Parameters**:
-- `build_xml` (required): Raw XML content of the build
-- `name` (optional): Build name (default: "MCP Build")
-
-**Returns**: Success message
-
-**Example**: "Load my 'Deadeye.xml' into the Lua bridge"
-
-#### `lua_get_stats`
-Get calculated stats from PoB engine (more accurate than XML parsing).
-
-**Parameters**:
-- `fields` (optional): Array of specific stat names to retrieve
-
-**Returns**: Calculated stats with metadata
-
-**Example**: "Get the stats from the Lua bridge"
-
-#### `lua_get_tree`
-Get current passive tree data from loaded build.
-
-**Parameters**: None
-
-**Returns**:
-- Tree version
-- Class ID and ascendancy IDs
-- All allocated node IDs
-- Mastery effect selections
-
-**Example**: "Show me the passive tree"
-
-#### `lua_set_tree`
-Update the passive tree and recalculate stats.
-
-**Parameters**:
-- `classId` (required): Class ID (0-6)
-- `ascendClassId` (required): Ascendancy class ID
-- `secondaryAscendClassId` (optional): Secondary ascendancy (for Scion)
-- `nodes` (required): Array of node IDs to allocate
-- `masteryEffects` (optional): Object mapping mastery node ID to effect ID
-- `treeVersion` (optional): Tree version string
-
-**Returns**: Success message
-
-**Example**: "Set the tree to allocate nodes [65834, 65824]"
-
-### Tree Planning Tools (Require Lua Bridge)
-
-#### `compare_trees`
-Compare passive tree differences between two builds.
-
-**Parameters**:
-- `build1` (required): First build filename
-- `build2` (required): Second build filename
-
-**Returns**: Differences in keystones/notables, point allocation, and stat comparison
-
-#### `test_allocation`
-What-if analysis: preview adding/removing nodes without modifying the loaded build.
-
-**Parameters**:
-- `build_name` (required): Base build filename
-- `changes` (required): Natural language description (e.g., "allocate Point Blank", "remove Acrobatics")
-
-**Returns**: Base vs simulated stats and differences
-
-#### `plan_tree`
-Plan passive tree allocation strategy based on goals.
-
-**Parameters**:
-- `goals` (required): Description of build goals (e.g., "crit bow Deadeye, get Point Blank")
-- `build_name` (optional): Base build to plan from
-
-**Returns**: Target keystones, notable suggestions, and planning guidance
-
-### Item & Skill Management Tools (Require Lua Bridge)
-
-#### `add_item`
-Add an item to the build from PoE item text format.
-
-**Parameters**:
-- `item_text` (required): Item text in Path of Exile format (copied from game/trade site)
-- `slot_name` (optional): Specific slot to equip to (e.g., "Weapon 1", "Body Armour")
-- `no_auto_equip` (optional): If true, add to inventory without equipping
-
-**Returns**:
-- Item ID and name
-- Slot equipped to
-- Confirmation that stats were recalculated
-
-**Example**: "Add this weapon: [paste item text]"
-
-**Item Text Format**:
-```
-Rarity: Rare
-Dragon Claw
-Corsair Sword
---------
-Quality: +20%
-Physical Damage: 45-85
-...
-```
-
-#### `get_equipped_items`
-Get all currently equipped items with details.
-
-**Parameters**: None
-
-**Returns**:
-- All equipment slots
-- Item names and base types
-- Item rarity
-- Flask activation status
-
-**Example**: "What items do I have equipped?"
-
-#### `toggle_flask`
-Activate or deactivate a flask and recalculate stats.
-
-**Parameters**:
-- `flask_number` (required): Flask slot (1-5)
-- `active` (required): true to activate, false to deactivate
-
-**Returns**:
-- Confirmation of flask status
-- Stats recalculated
-
-**Example**: "Activate my Diamond Flask"
-
-**Use Cases**:
-- Test DPS with flasks active
-- Compare buffed vs unbuffed stats
-- Optimize flask selection
-
-#### `get_skill_setup`
-Get all skill socket groups and current selection.
-
-**Parameters**: None
-
-**Returns**:
-- All socket groups with linked skills
-- Main socket group selection
-- Which skills are enabled
-- Which skills contribute to DPS calculations
-
-**Example**: "Show me my skill setup"
-
-#### `set_main_skill`
-Set which skill group to use for stat calculations.
-
-**Parameters**:
-- `socket_group` (required): Socket group index (1-based)
-- `active_skill_index` (optional): Which skill in the group
-- `skill_part` (optional): Which part of a multi-part skill
-
-**Returns**:
-- Confirmation of selection
-- Stats recalculated
-
-**Example**: "Set main skill to socket group 2"
-
-**Use Cases**:
-- Compare DPS between different skills
-- Test different 6-links
-- Switch between hit and DoT portions
-
-### Build Optimization Tools (Require Lua Bridge)
-
-#### `analyze_defenses`
-Analyze defensive stats and identify weaknesses. Provides prioritized recommendations.
-
-**Parameters**:
-- `build_name` (required)
-
-**Returns**: Defensive summary, gaps, and recommended fixes
-
-#### `suggest_optimal_nodes`
-Suggest the best nearby nodes to allocate for a goal (DPS, life, ES, resists, balanced, etc.). Ranks by efficiency and includes paths and projections.
-
-**Parameters**:
-- `build_name` (required)
-- `goal` (required)
-- `max_points`, `max_distance`, `min_efficiency`, `include_keystones` (optional)
-
-**Returns**: Ranked recommendations with paths and projected stats
-
-See `SUGGEST_OPTIMAL_NODES_GUIDE.md` for detailed guidance.
-
-#### `optimize_tree`
-Full tree optimizer that can add and remove nodes to meet a goal within constraints.
-
-**Parameters**:
-- `build_name` (required)
-- `goal` (required): Optimization goal (e.g., "maximize_dps", "maximize_life", "maximize_defense", "balanced")
-- `max_points` (optional): Maximum passive points to use
-- `max_iterations` (optional): Maximum optimization iterations
-- `constraints` (optional): Additional constraints for optimization
-
-**Returns**: Optimized allocation and stat outcome
-
-#### `get_nearby_nodes`
-List unallocated notables/keystones near the current allocation with distance and path cost using Dijkstra's algorithm.
-
-**Parameters**:
-- `build_name` (required)
-- `max_distance` (optional): Travel nodes to search (default 5)
-- `filter` (optional): Keyword filter (e.g., "life", "critical", "evasion")
-
-**Returns**: Reachable candidates with stats, distance, and cost
-
-#### `find_path_to_node`
-Find shortest path to a target node ID, including intermediate nodes and total cost.
-
-**Parameters**:
-- `build_name` (required)
-- `target_node_id` (required): Node ID string
-- `show_alternatives` (optional): Show up to 3 alternative paths
-
-**Returns**: Path nodes and total point cost
-
-#### `allocate_nodes`
-Allocate specific node IDs and calculate exact before/after stats using PoB's calculation engine.
-
-**Parameters**:
-- `build_name` (required)
-- `node_ids` (required): Array of node ID strings
-- `show_full_stats` (optional): Show complete stat comparison
-
-**Returns**: Before/after stats with percentage changes and confirmation
-
-#### `analyze_items`
-Analyze all equipped items and suggest upgrades based on build goals. Identifies empty slots, resistance gaps, and item quality issues.
-
-**Parameters**:
-- `build_name` (optional): Build file to analyze. If omitted and Lua bridge is active, analyzes currently loaded build.
-
-**Returns**:
-- Item analysis with priority rankings (high/medium/low)
-- Resistance cap status
-- Life/ES pool warnings
-- Slot-by-slot upgrade recommendations
-
-**Example**: "Analyze my items for upgrade opportunities"
-
-**Use Cases**:
-- Identify gear weaknesses
-- Cap elemental resistances
-- Find empty item slots
-- Optimize defensive layers
-
-#### `optimize_skill_links`
-Analyze skill gem setups and suggest link optimizations. Detects missing support gems, low-level gems, anti-synergies, and provides gem recommendations.
-
-**Parameters**:
-- `build_name` (optional): Build file to analyze. If omitted and Lua bridge is active, analyzes currently loaded build.
-
-**Returns**:
-- Skill group analysis for all socket groups
-- Missing link warnings
-- Support gem recommendations by skill type
-- Low level/quality gem alerts
-- Anti-synergy detection (e.g., Elemental Focus + Ignite supports)
-
-**Example**: "Optimize my skill links for maximum DPS"
-
-**Use Cases**:
-- Maximize damage from 6-link setups
-- Find missing support gems
-- Detect conflicting support gems
-- Ensure gems are properly leveled and quality'd
-
-#### `create_budget_build`
-Generate a comprehensive budget build plan based on requirements. Provides skill link recommendations, gearing strategy, defensive layers, passive tree priorities, and leveling tips.
-
-**Parameters**:
-- `class_name` (required): Character class (e.g., 'Ranger', 'Witch', 'Marauder')
-- `ascendancy` (optional): Ascendancy class (e.g., 'Deadeye', 'Occultist')
-- `main_skill` (required): Main skill gem (e.g., 'Lightning Arrow', 'Detonate Dead')
-- `budget_level` (required): 'low' (<50c), 'medium' (50-500c), 'high' (500c+)
-- `focus` (optional): 'offense', 'defense', or 'balanced' (default: 'balanced')
-
-**Returns**:
-- Budget breakdown and guidelines
-- Recommended skill links for budget tier
-- Defensive layer priorities
-- Gearing strategy by slot
-- Passive tree priorities
-- Leveling tips and next steps
-
-**Example**: "Create a budget Lightning Arrow Deadeye build for league start"
-
-**Use Cases**:
-- Plan league starter builds
-- Create budget builds for new players
-- Get comprehensive build guidance
-- Understand gearing priorities for your budget
-
-### Build Validation Tools (Works with or without Lua Bridge)
-
-#### `validate_build`
-Comprehensive build validation - checks resistances, defenses, mana, accuracy, and immunities. Provides prioritized recommendations with severity levels.
-
-**Parameters**:
-- `build_name` (required): Build to validate
-
-**Returns**:
-- Overall build score (0-10)
-- Critical issues (must fix immediately)
-- Warnings (should address soon)
-- Recommendations (nice to have improvements)
-- Actionable suggestions for each issue
-
-**Validation Categories**:
-1. **Resistances**: Fire/Cold/Lightning/Chaos resistance caps
-2. **Defenses**: Life/ES pool validation with level-appropriate thresholds
-3. **Mana Management**: Unreserved mana and regeneration checking
-4. **Accuracy**: Hit chance validation for attack builds
-5. **Immunities**: Bleed/freeze/poison immunity detection
-
-**Example**: "Validate my Deadeye build"
-
-**Use Cases**:
-- Check build readiness before mapping
-- Identify critical gaps in defenses
-- Get specific suggestions for improvements
-- Verify resistance caps after gear changes
-- Ensure adequate mana for skills
-
-**Smart Features**:
-- Prefers Lua bridge stats (more accurate), falls back to XML parsing
-- Context-aware (different thresholds for life vs ES builds, attack vs spell)
-- Level-appropriate validation (league start vs endgame)
-- Severity-weighted scoring
-
-**Output Example**:
-```
-=== Build Validation Report ===
-Overall Score: 7.0/10
-Status: Build is solid but has some issues to address.
-
-❌ Critical Issues (2):
-- Fire Resistance Too Low (45% → need 75%)
-- Life Pool Too Low (3450 → need 4500+)
-
-⚠️  Warnings (2):
-- No Bleed Immunity
-- Low Unreserved Mana (85 mana)
-
-💡 Recommendations (1):
-- Consider Poison Immunity
-```
-
-### Build Export & Persistence Tools (Always Available)
-
-#### `export_build`
-Export a copy of a build to an XML file. Creates variants/copies from existing build files with optional notes.
-
-**Parameters**:
-- `build_name` (required): Source build filename (e.g., 'MyBuild.xml')
-- `output_name` (required): Output filename (without .xml extension)
-- `output_directory` (optional): Target directory (defaults to POB_DIRECTORY/.pob-mcp/exports)
-- `overwrite` (optional): Allow overwriting existing file (default: false)
-- `notes` (optional): Additional notes to append to build notes
-
-**Returns**:
-- Full path to exported file
-- Confirmation message
-- Brief build summary (class, ascendancy, level)
-
-**Example**: "Export my Deadeye build as 'Deadeye_Variant'"
-
-**Use Cases**:
-- Create build variations before making changes
-- Duplicate builds for different strategies
-- Export to different locations
-- Add notes to build copies
-
-**Note**: This does NOT export from Lua bridge - use `save_tree` to apply Lua bridge modifications.
-
-#### `save_tree`
-Update only the passive tree in an existing build file. Use this to apply tree optimizations or Lua bridge modifications back to the original build.
-
-**Parameters**:
-- `build_name` (required): Target build filename to update
-- `nodes` (required): Array of node IDs to allocate
-- `mastery_effects` (optional): Mastery selections (object mapping node ID to effect ID)
-- `backup` (optional): Create backup before modifying (default: true)
-
-**Returns**:
-- Confirmation message
-- Backup file path (if created)
-- Summary of changes (nodes added/removed)
-
-**Example**: "Save these nodes to my Deadeye build: [1234, 5678, 9012]"
-
-**Use Cases**:
-- Apply tree optimizations to existing builds
-- Update passive tree without touching gear/gems
-- Quick tree modifications
-- Persist Lua bridge tree changes to files
-
-#### `snapshot_build`
-Create a versioned snapshot of a build for easy rollback. Snapshots are stored separately with metadata tracking stats and changes.
-
-**Parameters**:
-- `build_name` (required): Build to snapshot
-- `description` (optional): Description of this snapshot
-- `tag` (optional): User-friendly tag (e.g., 'before-respec', 'league-start')
-
-**Returns**:
-- Snapshot ID (timestamp-based)
-- Snapshot filename and storage location
-- Instructions for restoration
-
-**Example**: "Create a snapshot of my build before tree respec"
-
-**Use Cases**:
-- Save build state before major changes
-- Track build progression over time
-- Easy rollback if changes don't work out
-- Build history management
-
-**Snapshot Format**:
-```
-.pob-mcp/snapshots/BuildName.xml/
-  2025-01-15_143052_before-respec.xml
-  2025-01-15_143052_metadata.json
-```
-
-#### `list_snapshots`
-List all snapshots for a build with metadata and stats.
-
-**Parameters**:
-- `build_name` (required): Build to list snapshots for
-- `limit` (optional): Maximum number of snapshots to return
-- `tag_filter` (optional): Filter by tag
-
-**Returns**:
-- Array of snapshots with timestamps, tags, and descriptions
-- Stat snapshots (life, DPS, allocated nodes)
-- Total snapshot count and disk space used
-
-**Example**: "Show me all snapshots for my Deadeye build"
-
-**Use Cases**:
-- Review build history
-- Find specific snapshots by tag
-- Monitor disk space usage
-- Track stat progression
-
-#### `restore_snapshot`
-Restore a build from a snapshot. Optionally creates a backup of current state before restoring.
-
-**Parameters**:
-- `build_name` (required): Build to restore
-- `snapshot_id` (required): Snapshot ID (timestamp) or tag to restore from
-- `backup_current` (optional): Create snapshot of current state before restore (default: true)
-
-**Returns**:
-- Confirmation message
-- Backup snapshot ID (if created)
-- Summary of restored build
-
-**Example**: "Restore my build from the 'before-respec' snapshot"
-
-**Use Cases**:
-- Rollback unwanted changes
-- Compare different build versions
-- Restore to known-good state
-- A/B testing different strategies
-
-**Safety Features**:
-- Automatic backup before restoration
-- Validation of snapshot file
-- Build cache invalidation after restore
-
-### Skill Gem Analysis Tools (Always Available)
-
-#### `analyze_skill_links`
-Analyzes a skill's gem setup, evaluates support gem choices, and detects build archetype.
-
-**Parameters**:
-- `build_name` (required): Build to analyze
-- `skill_index` (optional): Which skill to analyze (0 = main skill, default: 0)
-
-**Returns**:
-- Active skill name, level, quality, and tags
-- Support gem ratings (excellent/good/suboptimal/poor)
-- Build archetype classification
-- Archetype match percentage
-- Detected issues and recommendations
-
-**Example Output**:
-```
-=== Skill Analysis: Lightning Arrow ===
-
-Active Skill: Lightning Arrow (Level 21/20)
-Tags: Attack, Projectile, AoE, Lightning, Bow
-Archetype: Elemental Bow Attack
-
-=== Support Gems (6-Link) ===
-1. ✓ Awakened Elemental Damage with Attacks (5/5) - Excellent
-2. ✓ Inspiration Support (4/0) - Good (consider quality)
-3. ⚠ Added Lightning Damage (1/0) - Suboptimal
-   → Recommendation: Replace with Awakened Added Lightning Damage
-...
-
-=== Archetype Match: 85% ===
-Strong alignment with "Elemental Bow Attack" archetype
-```
-
-#### `suggest_support_gems`
-Provides intelligent support gem recommendations based on build archetype.
-
-**Parameters**:
-- `build_name` (required): Build to analyze
-- `skill_index` (optional): Which skill to optimize (default: 0)
-- `count` (optional): Number of suggestions (default: 5)
-- `include_awakened` (optional): Include awakened gems (default: true)
-- `budget` (optional): "league_start", "mid_league", or "endgame" (default: "endgame")
-
-**Returns**:
-- Ranked support gem recommendations
-- Estimated DPS increase for each
-- Reasoning and synergy explanation
-- Cost estimates
-- Required conditions or conflicts
-
-**Use Cases**:
-- "What support gems should I use?"
-- "Best budget gem upgrades?"
-- "Show me endgame support gem options"
-
-#### `validate_gem_quality`
-Checks all gems for quality and level improvements.
-
-**Parameters**:
-- `build_name` (required): Build to validate
-- `include_corrupted` (optional): Include corruption recommendations (default: true)
-
-**Returns**:
-- Gems needing quality improvement
-- Awakened gem upgrade opportunities
-- Corruption targets for 21/23 gems
-- Priority recommendations
-
-**Example Output**:
-```
-=== Gem Quality Validation ===
-
-⚠ 3 gems need quality improvement:
-1. Lightning Arrow: 21/0 → 21/20 (Impact: High)
-2. Inspiration Support: 4/0 → 20/20 (Impact: Medium)
-...
-
-⭐ Awakened Gem Upgrades Available:
-1. Elemental Damage with Attacks → Awakened EDWA
-   Est. DPS Gain: ~8-12%
-...
-
-💡 Priority: Quality your Lightning Arrow first (highest impact)
-```
-
-#### `compare_gem_setups`
-Compares multiple gem configurations side-by-side.
-
-**Parameters**:
-- `build_name` (required): Build to test
-- `skill_index` (optional): Which skill to test (default: 0)
-- `setups` (required): Array of gem setups with format `{name: string, gems: string[]}`
-
-**Returns**:
-- Side-by-side comparison of gem setups
-- Structural analysis
-- Best setup recommendation
-
-**Note**: Full DPS comparison requires Lua bridge integration (planned for future enhancement).
-
-**Use Cases**:
-- "Which 6-link is better?"
-- "Compare awakened gems vs budget setup"
-
-#### `find_optimal_links`
-Auto-generates the best support gem combination for a skill.
-
-**Parameters**:
-- `build_name` (required): Build to optimize
-- `skill_index` (optional): Which skill to optimize (default: 0)
-- `link_count` (required): Number of links (4, 5, or 6)
-- `budget` (optional): "league_start", "mid_league", or "endgame" (default: "endgame")
-- `optimize_for` (optional): "dps", "clear_speed", "bossing", or "defense" (default: "dps")
-
-**Returns**:
-- Optimal gem combination for specified link count
-- Step-by-step upgrade path
-- Estimated DPS increases
-- Total cost estimate
-
-**Example Output**:
-```
-=== Optimal 6-Link for Lightning Arrow ===
-
-Optimization Target: DPS (Bossing)
-Budget: Endgame
-
-🏆 Optimal Setup:
-1. Lightning Arrow (21/20)
-2. Awakened Elemental Damage with Attacks Support (5/20)
-3. Awakened Added Lightning Damage Support (5/20)
-4. Awakened Lightning Penetration Support (5/20)
-5. Inspiration Support (21/20)
-6. Elemental Focus Support (21/20)
-
-=== Upgrade Path ===
-Step 1: Add Awakened Lightning Penetration
-Est. DPS Increase: +26.5%
-Cost: ~50 Divine Orbs
-...
-```
-
-**Use Cases**:
-- "What's my best 6-link?"
-- "Show me a league-start 4-link"
-- "Optimize my main skill for bossing"
-
-## Development
-
-### Watch mode for development:
-```bash
-npm run dev
-```
-
-### Testing with example build:
-The repository includes an `example-build.xml` file you can use for testing. Copy it to your PoB directory or adjust the `POB_DIRECTORY` to point to the repo folder.
-
-## Path of Building File Structure
-
-Path of Building stores builds as XML files with this general structure:
-- `<Build>`: Character info and stats
-- `<Tree>`: Passive skill tree
-- `<Skills>`: Active skills and gem links
-- `<Items>`: Equipped items
-- `<Notes>`: Build notes and instructions
-
-## Troubleshooting
-
-### XML Features
-
-#### No builds found
-- Verify your `POB_DIRECTORY` path is correct
-- Ensure the directory contains `.xml` files
-- Check file permissions
-
-#### Parse errors
-- Ensure your Path of Building is up to date
-- Try opening the build in PoB to verify it's not corrupted
-
-#### Connection issues
-- Restart Claude Desktop after configuration changes
-- Check the Claude Desktop logs for errors
-- Verify the path to `build/index.js` is absolute
-
-### Lua Bridge Features
-
-#### "luajit command not found"
-**Solution**: Install LuaJIT and ensure it's in your PATH
+| Variable | Default | Description |
+|---|---|---|
+| `POB_DIRECTORY` | OS-default Builds dir | Path to your PoB builds directory |
+| `POB_LUA_ENABLED` | `false` | Set `"true"` to enable Lua bridge |
+| `POB_FORK_PATH` | `~/Projects/PathOfBuilding/src` | Path to PathOfBuilding/src |
+| `POB_CMD` | `luajit` | LuaJIT binary path |
+| `POB_TIMEOUT_MS` | `10000` | Lua request timeout (ms) |
+| `POB_API_TCP` | `false` | Use TCP instead of stdio |
+| `POB_API_TCP_HOST` | `127.0.0.1` | TCP host (when TCP mode) |
+| `POB_API_TCP_PORT` | `31337` | TCP port (when TCP mode) |
+| `POE_TRADE_ENABLED` | `false` | Enable Trade API tools |
+| `POE_TRADE_LEAGUE` | — | Default league for trade queries |
+
+### Setting Up the Lua Bridge
+
+The Lua bridge uses PoB's actual calculation engine for accurate stats.
+
+#### 1. Install LuaJIT
 ```bash
 # macOS
 brew install luajit
@@ -1051,191 +151,298 @@ brew install luajit
 # Ubuntu/Debian
 sudo apt-get install luajit
 
-# Windows: Download from https://luajit.org/
+# Windows: download from https://luajit.org/ and add to PATH
 ```
 
-#### "Failed to find valid ready banner"
-**Solution**: Check `POB_FORK_PATH` points to the correct directory
-- Should contain `HeadlessWrapper.lua`
-- Should contain `Modules/` directory with PoB code
-- Verify path with: `ls $POB_FORK_PATH/HeadlessWrapper.lua`
+#### 2. Clone PathOfBuilding
+```bash
+git clone https://github.com/ianderse/PathOfBuilding.git
+cd PathOfBuilding
+git checkout api-stdio
+```
+Note the full path to the `src/` directory — that's your `POB_FORK_PATH`.
 
-#### "Timed out waiting for response"
-**Solutions**:
-1. Increase `POB_TIMEOUT_MS` (try 20000 for 20 seconds)
-2. Verify PoB fork installation is complete
-3. Check if `HeadlessWrapper.lua` has syntax errors
-4. Test manually: `cd $POB_FORK_PATH && luajit HeadlessWrapper.lua`
+#### 3. Verify
+```bash
+luajit -v
+ls /path/to/PathOfBuilding/src/HeadlessWrapper.lua
+```
 
-#### Stats don't match PoB GUI
-**Possible causes**:
-- Different game version between fork and GUI
-- Configuration differences (bandit, pantheon, enemy level)
-- PoB fork out of date (pull latest changes)
-- Different tree version selected
+#### 4. Update Claude Desktop config and restart Claude Desktop
 
-#### TCP connection fails
-**Solutions**:
-1. Verify PoB GUI launched with `POB_API_TCP=1` environment variable
-2. Check if port 31337 is in use: `lsof -i :31337`
-3. Test connection: `telnet 127.0.0.1 31337`
-4. Check firewall settings
-5. For remote connections, ensure SSH tunneling is set up correctly
+---
 
-#### Bridge becomes unresponsive
-**Solution**: Stop and restart the bridge
-1. "Stop the Lua bridge"
-2. Wait a few seconds
-3. "Start the Lua bridge"
+## Available Tools
 
+The server registers **71 tools** across 10 categories.
+
+### XML-Based Tools (Always Available)
+
+| Tool | Description |
+|---|---|
+| `list_builds` | List all `.xml` build files |
+| `analyze_build` | Full build summary: class, stats, skills, items, tree |
+| `compare_builds` | Side-by-side build comparison |
+| `get_build_stats` | Extract raw stats from build XML |
+| `start_watching` | Monitor builds directory for changes |
+| `stop_watching` | Stop file monitoring |
+| `watch_status` | Show watching status and cache info |
+| `get_recent_changes` | List recently modified builds |
+| `refresh_tree_data` | Clear passive tree data cache |
+
+### Tree Analysis Tools (Always Available)
+
+| Tool | Description |
+|---|---|
+| `compare_trees` | Show node differences between two builds |
+| `test_allocation` | Preview stat changes from allocating specific nodes |
+| `plan_tree` | Plan a path to a specific notable or keystone |
+| `get_nearby_nodes` | Find notables/keystones reachable from current allocation |
+| `find_path_to_node` | Shortest path to a target node ID |
+| `allocate_nodes` | Allocate node IDs directly into a build file |
+
+### Lua Bridge — Core (Require `POB_LUA_ENABLED=true`)
+
+| Tool | Description |
+|---|---|
+| `lua_start` | Start the PoB calculation engine (stdio or TCP) |
+| `lua_stop` | Stop the engine and free resources |
+| `lua_new_build` | Create a blank build for a given class/ascendancy |
+| `lua_load_build` | Load a build file into the engine |
+| `lua_save_build` | Save the current in-memory build to a `.xml` file |
+| `set_character_level` | Set level and recalculate all stats |
+| `lua_get_stats` | Get calculated stats (`category`: `offense`/`defense`/`all`) |
+| `lua_get_tree` | View passive tree: class, ascendancy, all allocated node IDs |
+| `lua_set_tree` | Replace passive tree allocation (preserves class if omitted) |
+| `search_tree_nodes` | Search passive tree by name or stat text |
+
+**`lua_set_tree` class IDs**: 0=Scion, 1=Marauder, 2=Ranger, 3=Witch, 4=Duelist, 5=Templar, 6=Shadow
+
+**Witch ascendancy IDs**: 1=Occultist, 2=Elementalist, 3=Necromancer
+
+**`lua_save_build` is required** before using file-based tools (`validate_build`, `analyze_build`, etc.) on an in-memory build.
+
+### Lua Bridge — Item & Skill Management
+
+| Tool | Description |
+|---|---|
+| `add_item` | Add item from PoE clipboard text to a slot |
+| `add_multiple_items` | Add multiple items in one operation |
+| `get_equipped_items` | List all equipped gear with name, base, and rarity |
+| `toggle_flask` | Activate/deactivate flask 1–5; returns updated stats |
+| `get_skill_setup` | Show all socket groups with gems, levels, and quality |
+| `set_main_skill` | Set which group/gem is used for DPS calculations |
+| `create_socket_group` | Create a new socket group (label, slot, enabled) |
+| `add_gem` | Add a gem to a socket group (name, level, quality) |
+| `set_gem_level` | Set gem level by group + gem index |
+| `set_gem_quality` | Set gem quality (Default/Anomalous/Divergent/Phantasmal) |
+| `remove_gem` | Remove a gem by group + gem index |
+| `remove_skill` | Remove an entire socket group |
+| `setup_skill_with_gems` | Create a socket group with active gem + supports in one call |
+
+**Slot names**: `Weapon 1`, `Weapon 2`, `Helmet`, `Body Armour`, `Gloves`, `Boots`, `Amulet`, `Ring 1`, `Ring 2`, `Belt`, `Flask 1`–`Flask 5`
+
+### Lua Bridge — Build Optimization
+
+| Tool | Description |
+|---|---|
+| `analyze_defenses` | 3-layer defensive audit: avoidance / mitigation / recovery |
+| `suggest_optimal_nodes` | Archetype-aware node suggestions by goal |
+| `optimize_tree` | Recommend nearby nodes to allocate for a goal |
+| `analyze_items` | Slot-by-slot item analysis with upgrade priorities |
+| `optimize_skill_links` | Audit supports: "more" multipliers, penetration, anti-synergies |
+| `create_budget_build` | Generate a starter build plan for a class/skill/budget |
+
+**`suggest_optimal_nodes` goals**: `damage`, `defense`, `life`, `es`, `resist`, `speed`
+
+**Defensive layers**:
+- **Avoidance** — evasion, spell suppression, dodge, block
+- **Mitigation** — armour/PDR, endurance charges
+- **Recovery** — life regen (≥1%/s), leech, ES recharge
+
+A build with all 3 layers is considered exceptional.
+
+### Configuration & Enemy Settings
+
+| Tool | Description |
+|---|---|
+| `get_config` | View bandit, pantheon, and enemy settings |
+| `set_config` | Toggle charges, buffs, conditions (e.g. `usePowerCharges`, `enemyIsBoss`) |
+| `set_enemy_stats` | Set enemy level, resistances, armour, evasion for DPS scenarios |
+
+### Build Validation
+
+| Tool | Description |
+|---|---|
+| `validate_build` | Check resistances, life, defensive layers, mana, immunities, accuracy, damage scaling |
+
+Returns critical issues, warnings, and info with actionable suggestions and an overall 0–10 health score. Uses Lua bridge stats when available; falls back to XML parsing. `build_name` is optional — omitting it validates the currently loaded Lua bridge build.
+
+### Skill Gem Analysis
+
+| Tool | Description |
+|---|---|
+| `analyze_skill_links` | Evaluate support gems and detect build archetype |
+| `suggest_support_gems` | Ranked support gem recommendations with DPS estimates |
+| `validate_gem_quality` | Find gems needing quality, awakened upgrades, or corruption |
+| `compare_gem_setups` | Side-by-side structural comparison of gem configurations |
+| `find_optimal_links` | Auto-generate best support combo for a 4/5/6-link and budget |
+
+**Budget tiers**: `league_start`, `mid_league`, `endgame`
+
+### Build Export & Persistence
+
+| Tool | Description |
+|---|---|
+| `export_build` | Copy a build to a new XML file with optional notes |
+| `save_tree` | Write passive tree back to an existing build file |
+| `snapshot_build` | Create a versioned snapshot with description and tag |
+| `list_snapshots` | List all snapshots for a build |
+| `restore_snapshot` | Restore from a snapshot (auto-backs up current state) |
+
+Snapshots are stored in `POB_DIRECTORY/.pob-mcp/snapshots/`.
+
+**Note**: `export_build` copies from the XML file, not from the Lua bridge. Use `lua_save_build` first if you want to export in-memory changes.
+
+### Currency & Market Data (poe.ninja)
+
+| Tool | Description |
+|---|---|
+| `get_currency_rates` | Live exchange rates for all currencies (Chaos Orb equivalent) |
+| `find_arbitrage` | Detect profitable currency trading loops |
+| `calculate_trading_profit` | Evaluate a specific trading chain |
+
+Rates are updated every 5 minutes from poe.ninja. Pass the **exact** league name (e.g., `Standard`, `Hardcore`, `Settlers`).
+
+### Trade API Tools (Require `POE_TRADE_ENABLED=true`)
+
+| Tool | Description |
+|---|---|
+| `search_trade_items` | Search trade with stat filters, price range, link count |
+| `get_item_price` | Price statistics (min/max/median/average) for an item |
+| `get_leagues` | List available leagues |
+| `search_stats` | Look up Trade API stat IDs |
+| `find_item_upgrades` | Identify best upgrade candidates for your build |
+| `find_resistance_gear` | Find affordable gear to cap specific resistances |
+| `compare_trade_items` | Compare multiple trade listings side by side |
+| `search_cluster_jewels` | Search for cluster jewels by notable |
+| `analyze_cluster_jewels` | Evaluate cluster jewel setups |
+| `generate_shopping_list` | Generate a prioritized shopping list from build analysis |
+
+---
+
+## Typical Workflows
+
+### Analyze an existing build
+```
+1. lua_start
+2. lua_load_build (build_name: "MyBuild.xml")
+3. lua_get_stats (category: "defense")
+4. validate_build
+5. analyze_defenses (build_name: "MyBuild.xml")
+```
+
+### Build from scratch
+```
+1. lua_start
+2. lua_new_build (class_name: "Witch", ascendancy: "Necromancer")
+3. setup_skill_with_gems (active_gem: "Summon Skeletons", support_gems: [...])
+4. lua_set_tree (nodes: [...])
+5. lua_get_stats
+6. lua_save_build (build_name: "MySummoner.xml")
+```
+
+### Optimize passive tree
+```
+1. lua_load_build (build_name: "MyBuild.xml")
+2. suggest_optimal_nodes (goal: "life", points_available: 5)
+3. search_tree_nodes (query: "maximum life")
+4. lua_get_tree   ← copy current node list
+5. lua_set_tree   ← add new nodes to the list
+6. lua_get_stats  ← verify improvement
+7. lua_save_build ← persist
+```
+
+### Test DPS against Shaper
+```
+1. lua_load_build
+2. set_enemy_stats (level: 84, fire_resist: 40, cold_resist: 40, lightning_resist: 40)
+3. set_config (config_name: "enemyIsBoss", value: true)
+4. lua_get_stats (category: "offense")
+```
+
+---
+
+## Troubleshooting
+
+### XML Features
+
+**No builds found**
+- Verify `POB_DIRECTORY` is correct and contains `.xml` files
+- Check file permissions
+
+**Parse errors**
+- Open the build in PoB GUI to verify it isn't corrupted
+- Ensure PoB is up to date
+
+### Lua Bridge
+
+**`luajit command not found`**
+```bash
+brew install luajit          # macOS
+sudo apt-get install luajit  # Ubuntu/Debian
+```
+Or set `POB_CMD` to the full path (e.g., `/opt/homebrew/bin/luajit`).
+
+**`Failed to find valid ready banner`**
+`POB_FORK_PATH` must point to the directory containing `HeadlessWrapper.lua`:
+```bash
+ls "$POB_FORK_PATH/HeadlessWrapper.lua"   # must exist
+ls "$POB_FORK_PATH/Modules/"              # must exist
+```
+
+**`Timed out waiting for response`**
+- Increase `POB_TIMEOUT_MS` (try `20000`)
+- Test manually: `cd "$POB_FORK_PATH" && luajit HeadlessWrapper.lua`
+
+**Stats don't match PoB GUI**
+- Check bandit/pantheon/enemy settings with `get_config`
+- Ensure the correct tree spec is active in the XML
+- Make sure your PathOfBuilding fork is on the `api-stdio` branch and up to date
+
+**Bridge becomes unresponsive**
+```
+lua_stop → wait a moment → lua_start
+```
 If still unresponsive, restart Claude Desktop.
 
-## Testing
+**Nodes dropped after `lua_set_tree`**
+Nodes must form a valid connected path from the class starting node. Disconnected nodes are silently dropped by PoB. Ensure all intermediate nodes are included.
 
-For comprehensive testing instructions, see [TESTING_GUIDE.md](TESTING_GUIDE.md).
+**`lua_save_build` doesn't persist gem changes**
+Gem modifications made via `add_gem`, `set_gem_level`, `set_gem_quality` are currently held in Lua memory and are not serialized back to the XML on save. This is a known limitation.
 
-Quick test checklist:
-- [ ] XML features work without `POB_LUA_ENABLED`
-- [ ] Bridge starts when `POB_LUA_ENABLED=true`
-- [ ] Can load builds and get stats
-- [ ] Tree modifications update stats correctly
-- [ ] What-if previews work without changing loaded build
-- [ ] Build planning provides relevant suggestions
-- [ ] Bridge stops cleanly
+---
 
-## Project Status
+## Development
 
-**Current Version**: 1.0.0 - All Core Features Complete ✅
+```bash
+npm run build   # compile TypeScript
+npm run dev     # watch mode
+```
 
-### Implemented Features
+## Path of Building XML Structure
 
-**Phase 1: XML Analysis** ✅
-- Build listing, analysis, and comparison
-- Stat extraction from XML
-- File watching with automatic cache invalidation
-- 8 XML-based tools
-
-**Phase 2: Passive Tree Parsing** ✅
-- Node allocation extraction
-- Jewel socket identification
-- Tree metadata parsing
-- Support for all tree versions
-
-**Phase 3: Lua Bridge Integration** ✅
-- High-fidelity stat calculation using PoB's calculation engine
-- Tree modification with live recalculation
-- What-if analysis for node changes
-- Tree comparison between builds
-- Build planning assistance
-- 3 tree planning tools
-
-**Phase 4: Item & Skill Management** ✅
-- Item addition from PoE text format
-- Equipment viewing and management
-- Flask activation control
-- Skill setup inspection and configuration
-- Main skill selection
-- Complete build modification workflow
-- 5 item & skill tools
-
-**Phase 5: Automated Testing** ⏸️
-- Deferred for future development
-
-**Phase 6: Build Optimization** ✅
-- AI-powered intelligent node recommendations (`suggest_optimal_nodes`)
-- Full tree optimizer with add/remove capability (`optimize_tree`)
-- Defensive analysis with prioritized recommendations (`analyze_defenses`)
-- Pathfinding to target nodes with Dijkstra's algorithm (`find_path_to_node`)
-- Nearby node discovery with reachability checking (`get_nearby_nodes`)
-- Direct node allocation with stat calculations (`allocate_nodes`)
-- Item upgrade recommendations (`analyze_items`)
-- Skill link optimization (`optimize_skill_links`)
-- Budget build creation from requirements (`create_budget_build`)
-- 8 optimization tools
-
-**Phase 7: Build Validation** ✅
-- Comprehensive build validation (`validate_build`)
-- Resistance, defense, mana, accuracy, and immunity checking
-- Severity-based issue classification (critical/warning/info)
-- Overall build health scoring (0-10)
-- Actionable recommendations with specific suggestions
-- Works with Lua bridge (accurate) or XML fallback
-- 1 validation tool
-
-**Phase 8: Build Export & Persistence** ✅
-- Export builds to XML files (`export_build`)
-- Update passive tree without affecting gear/skills (`save_tree`)
-- Create versioned snapshots with metadata (`snapshot_build`)
-- View snapshot history with stats (`list_snapshots`)
-- Rollback to previous snapshots (`restore_snapshot`)
-- 5 export and persistence tools
-
-**Phase 9: Configuration & Enemy Settings** ✅
-- View configuration state (`get_config`)
-- Modify configuration inputs (`set_config`)
-- Configure enemy parameters (`set_enemy_stats`)
-- Toggle charges, buffs, and conditions
-- Test DPS against different enemy types
-- Before/after impact analysis
-- 3 configuration tools
-
-**Phase 11: Skill Gem Recommendations** ✅
-- Skill gem setup analysis (`analyze_skill_links`)
-- Intelligent support gem suggestions (`suggest_support_gems`)
-- Gem quality validation (`validate_gem_quality`)
-- Gem configuration comparison (`compare_gem_setups`)
-- Optimal link generation (`find_optimal_links`)
-- Build archetype detection (Elemental Bow Attack, Critical Spell, etc.)
-- Budget-aware recommendations (league-start to endgame)
-- Curated gem database with synergies and anti-synergies
-- 5 skill gem analysis tools
-
-**Total Available Tools**: 44 tools across 8 categories
-
-### Technical Achievements
-
-**Lua Bridge Enhancements**:
-- Implemented `NewFileSearch`, `Inflate`, `Deflate`, `GetScriptPath` for headless mode
-- Full support for split timeless jewel data files (`.part0` through `.part4`)
-- Robust JSON response parsing with non-JSON output filtering
-- Comprehensive debug logging system
-
-**Passive Tree Parsing**:
-- Advanced brace-counting algorithm for nested Lua table structures
-- Accurate extraction of node connections (`out` and `in` arrays)
-- Full support for 3,800+ node passive tree data
-
-**Pathfinding & Graph Algorithms**:
-- Dijkstra's algorithm for shortest path calculations
-- BFS with reachability validation for node discovery
-- Efficient distance calculations across entire passive tree graph
-- Optimized performance for real-time recommendations
-
-### Future Enhancements
-
-**Phase 7: Advanced Tree Analysis**
-- Multi-path comparison showing alternative routes
-- Jewel socket optimization and placement recommendations
-- Cluster jewel integration and analysis
-
-**Phase 8: Build Export & Persistence**
-- Export modified builds to XML files
-- Save optimized trees back to PoB directory
-- Build version management and snapshots
-- Rollback and comparison history
-
-**Later Enhancements**
-- Item crafting simulation (fossil/essence/harvest)
-- Gem level/quality modification tools
-- Configuration templates (bandit, pantheon, enemy presets)
-- Build template library and sharing
-- PoE Wiki integration for detailed tooltips
-- Trade site integration for real-time upgrade recommendations
-- Automated testing suite (Phase 5)
+PoB builds are XML files with:
+- `<Build>`: Character info and stats
+- `<Tree>`: Passive skill tree node allocations
+- `<Skills>`: Socket groups and gem links
+- `<Items>`: Equipped items
+- `<Notes>`: Build notes
 
 ## Contributing
 
-Feel free to submit issues or pull requests!
+Issues and pull requests are welcome!
 
 ## License
 
