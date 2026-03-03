@@ -21,10 +21,10 @@ import { handleLuaStart, handleLuaStop, handleLuaNewBuild, handleLuaSaveBuild, h
 import { handleAddItem, handleGetEquippedItems, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
-import { handleGetConfig, handleSetConfig, handleSetEnemyStats } from "../handlers/configHandlers.js";
+import { handleGetConfig, handleSetConfig, handleSetEnemyStats, handleSaveConfigPreset, handleLoadConfigPreset, handleListConfigPresets } from "../handlers/configHandlers.js";
 import { handleValidateBuild } from "../handlers/validationHandlers.js";
-import { handleExportBuild, handleSaveTree, handleSnapshotBuild, handleListSnapshots, handleRestoreSnapshot } from "../handlers/exportHandlers.js";
-import { handleAnalyzeSkillLinks, handleSuggestSupportGems, handleCompareGemSetups, handleValidateGemQuality, handleFindOptimalLinks } from "../handlers/skillGemHandlers.js";
+import { handleExportBuild, handleSaveTree, handleSnapshotBuild, handleListSnapshots, handleRestoreSnapshot, handleExportBuildSummary } from "../handlers/exportHandlers.js";
+import { handleAnalyzeSkillLinks, handleSuggestSupportGems, handleCompareGemSetups, handleValidateGemQuality, handleFindOptimalLinks, handleGemUpgradePath } from "../handlers/skillGemHandlers.js";
 import { handleSearchTradeItems, handleGetItemPrice, handleGetLeagues, handleSearchStats, handleFindItemUpgrades, handleFindResistanceGear, handleCompareTradeItems } from "../handlers/tradeHandlers.js";
 import { handleGetCurrencyRates, handleFindArbitrage, handleCalculateTradingProfit } from "../handlers/poeNinjaHandlers.js";
 import { handleSearchClusterJewels, handleAnalyzeClusterJewels, handleAnalyzeBuildClusterJewels } from "../handlers/clusterJewelHandlers.js";
@@ -242,6 +242,17 @@ export async function routeToolCall(
         evasion: args?.evasion as number | undefined,
       });
 
+    case "save_config_preset":
+      if (!args?.name) throw new Error("Missing preset name");
+      return await handleSaveConfigPreset(deps.contextBuilder.buildConfigPresetContext(), args.name as string);
+
+    case "load_config_preset":
+      if (!args?.name) throw new Error("Missing preset name");
+      return await handleLoadConfigPreset(deps.contextBuilder.buildConfigPresetContext(), args.name as string);
+
+    case "list_config_presets":
+      return await handleListConfigPresets(deps.contextBuilder.buildConfigPresetContext());
+
     case "lua_set_tree":
       if (!args) throw new Error("Missing arguments");
       return await handleLuaSetTree(luaContext, args);
@@ -428,6 +439,9 @@ export async function routeToolCall(
         snapshot_id: args.snapshot_id as string,
         backup_current: args.backup_current as boolean | undefined,
       });
+
+    case "export_build_summary":
+      return await handleExportBuildSummary(deps.contextBuilder.buildExportContext());
 
     // Skill Gem Analysis Tools (Phase 11)
     case "analyze_skill_links":
@@ -690,6 +704,12 @@ export async function routeToolCall(
       if (!args?.build_name) throw new Error("Missing build_name");
       if (args?.notes == null) throw new Error("Missing notes");
       return await handleSetBuildNotes(deps.contextBuilder.buildHandlerContext(), args.build_name as string, args.notes as string);
+
+    case "gem_upgrade_path":
+      return await handleGemUpgradePath(
+        deps.contextBuilder.buildSkillGemContext(),
+        args || {}
+      );
 
     default:
       throw new Error(`Unknown tool: ${name}`);

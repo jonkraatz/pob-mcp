@@ -883,6 +883,42 @@ export function getConfigToolSchemas(): any[] {
         },
       },
     },
+    {
+      name: "save_config_preset",
+      description: "Save the current configuration (charges, conditions, enemy settings) as a named preset for quick reuse",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Preset name (e.g. 'bossing', 'mapping', 'full-charges')",
+          },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      name: "load_config_preset",
+      description: "Load a previously saved configuration preset, restoring all charge, condition, and enemy settings at once",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Preset name to load",
+          },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      name: "list_config_presets",
+      description: "List all saved configuration presets",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
   ];
 }
 
@@ -1041,6 +1077,23 @@ export function getSkillGemToolSchemas(): any[] {
         required: ["build_name", "link_count"],
       },
     },
+    {
+      name: "gem_upgrade_path",
+      description: "Generate a prioritized gem upgrade shopping list showing which gems to level, quality, and upgrade to awakened versions, ordered by impact and budget",
+      inputSchema: {
+        type: "object",
+        properties: {
+          build_name: {
+            type: "string",
+            description: "Build file (optional if loaded in Lua bridge)",
+          },
+          budget: {
+            type: "string",
+            description: "Budget tier: 'league_start', 'mid_league', 'endgame' (default: endgame)",
+          },
+        },
+      },
+    },
   ];
 }
 
@@ -1170,6 +1223,14 @@ export function getExportToolSchemas(): any[] {
           },
         },
         required: ["build_name", "snapshot_id"],
+      },
+    },
+    {
+      name: "export_build_summary",
+      description: "Generate a clean markdown summary of the loaded build suitable for sharing on Reddit, Discord, or as build documentation",
+      inputSchema: {
+        type: "object",
+        properties: {},
       },
     },
   ];

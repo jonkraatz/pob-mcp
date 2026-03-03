@@ -421,6 +421,134 @@ export async function handleFindOptimalLinks(
 }
 
 /**
+ * Handle gem_upgrade_path tool call
+ */
+export async function handleGemUpgradePath(
+  context: SkillGemHandlerContext,
+  args: { build_name?: string; budget?: string }
+) {
+  if (!context.ensureLuaClient || !context.getLuaClient) {
+    throw new Error('Lua bridge not configured. Use lua_load_build first.');
+  }
+  await context.ensureLuaClient();
+  const luaClient = context.getLuaClient();
+  if (!luaClient) throw new Error('Lua bridge not active. Use lua_load_build first.');
+
+  const skills = await luaClient.getSkills();
+  const groups: any[] = skills?.groups ?? [];
+
+  const budgetTier = ((args.budget || 'endgame') as 'league_start' | 'mid_league' | 'endgame');
+  const budgetMap: Record<string, number> = { league_start: 0, mid_league: 50, endgame: 999 };
+  const budgetChaos = budgetMap[budgetTier] ?? 999;
+
+  interface GemUpgrade {
+    gemName: string;
+    groupLabel: string;
+    currentLevel: number;
+    currentQuality: number;
+    action: string;
+    priority: number;
+    costEstimate: string;
+    reason: string;
+  }
+
+  const upgrades: GemUpgrade[] = [];
+
+  for (const group of groups) {
+    const isMain = group.index === skills.mainSocketGroup;
+    for (const gem of (group.gems ?? [])) {
+      const name: string = gem.name || gem;
+      const level: number = gem.level ?? 1;
+      const quality: number = gem.quality ?? 0;
+      const isSupport = name.includes('Support') || name.includes('Mirage') || gem.isSupport;
+      const multiplier = isMain ? 3 : 1;
+
+      // Level upgrade
+      if (level < 20) {
+        upgrades.push({
+          gemName: name,
+          groupLabel: group.label || `Group ${group.index}`,
+          currentLevel: level,
+          currentQuality: quality,
+          action: `Level to 20 (currently ${level})`,
+          priority: (20 - level) * multiplier * (isSupport ? 0.8 : 1.2),
+          costEstimate: 'Free (just level it)',
+          reason: 'Every gem level increases gem power — level gems in inactive weapon swap slots',
+        });
+      }
+
+      // Quality upgrade
+      if (quality < 20) {
+        const costChaos = Math.round((20 - quality) * 0.2);
+        if (costChaos <= budgetChaos) {
+          upgrades.push({
+            gemName: name,
+            groupLabel: group.label || `Group ${group.index}`,
+            currentLevel: level,
+            currentQuality: quality,
+            action: `Bring to 20% quality (currently ${quality}%)`,
+            priority: (20 - quality) * multiplier * (isSupport ? 0.6 : 0.9),
+            costEstimate: `~${costChaos}c in Gemcutter's Prisms`,
+            reason: 'Quality bonuses stack with gem level — use Hillock crafting bench for +28% quality',
+          });
+        }
+      }
+
+      // 21/20 via corruption
+      if (level === 20 && quality === 20 && isMain) {
+        upgrades.push({
+          gemName: name,
+          groupLabel: group.label || `Group ${group.index}`,
+          currentLevel: level,
+          currentQuality: quality,
+          action: 'Corrupt for 21/20 (Vaal Orb on 20/20)',
+          priority: 15 * multiplier,
+          costEstimate: '25% chance of 21/20, 25% chance brick — buy pre-corrupted 21/20 for safety',
+          reason: 'Level 21 is a significant DPS increase for active gems; corruption is high-risk/reward',
+        });
+      }
+
+      // Awakened version for supports
+      if (isSupport && isMain && level >= 18 && budgetTier === 'endgame') {
+        upgrades.push({
+          gemName: name,
+          groupLabel: group.label || `Group ${group.index}`,
+          currentLevel: level,
+          currentQuality: quality,
+          action: `Buy Awakened ${name.replace(' Support', '')} Support`,
+          priority: 20,
+          costEstimate: 'Varies greatly — check poe.ninja prices',
+          reason: 'Awakened supports have higher quality bonuses and occasionally better base effects',
+        });
+      }
+    }
+  }
+
+  upgrades.sort((a, b) => b.priority - a.priority);
+
+  let output = '=== Gem Upgrade Path ===\n';
+  output += `Budget tier: ${budgetTier}\n\n`;
+
+  if (upgrades.length === 0) {
+    output += 'All gems appear to be fully upgraded!\n';
+    return { content: [{ type: 'text' as const, text: output }] };
+  }
+
+  let rank = 1;
+  for (const u of upgrades.slice(0, 15)) {
+    output += `**${rank}. ${u.gemName}** (${u.groupLabel})\n`;
+    output += `   Action: ${u.action}\n`;
+    output += `   Cost: ${u.costEstimate}\n`;
+    output += `   Why: ${u.reason}\n\n`;
+    rank++;
+  }
+
+  output += '_Use `validate_gem_quality` for a full gem quality audit._\n';
+
+  return { content: [{ type: 'text' as const, text: output }] };
+}
+
+/**
  * Helper: Extract skills from build
  */
 function extractSkills(build: any): Array<{ gems: any[]; slot: string }> {
