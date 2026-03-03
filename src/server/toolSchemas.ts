@@ -653,6 +653,14 @@ export function getLuaToolSchemas(): any[] {
         required: ["items"],
       },
     },
+    {
+      name: "suggest_masteries",
+      description: "Analyze all allocated mastery nodes and suggest the best effect choices by simulating each option's DPS/EHP impact. Requires a build to be loaded via lua_load_build.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
   ];
 }
 

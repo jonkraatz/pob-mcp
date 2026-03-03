@@ -35,7 +35,8 @@ const HIGH_IMPACT_TOOLS = [
   'export_build',
   'save_tree',
   'snapshot_build',
-  'restore_snapshot'
+  'restore_snapshot',
+  'suggest_masteries'
 ];
 
 export class ToolGate {

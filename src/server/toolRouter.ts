@@ -15,7 +15,7 @@ import type { PoeNinjaClient } from "../services/poeNinjaClient.js";
 // Import handlers
 import { handleListBuilds, handleAnalyzeBuild, handleCompareBuilds, handleGetBuildStats } from "../handlers/buildHandlers.js";
 import { handleStartWatching, handleStopWatching, handleGetRecentChanges, handleWatchStatus, handleRefreshTreeData } from "../handlers/watchHandlers.js";
-import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handleGetPassiveUpgrades } from "../handlers/treeHandlers.js";
+import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handleGetPassiveUpgrades, handleSuggestMasteries } from "../handlers/treeHandlers.js";
 import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
 import { handleLuaStart, handleLuaStop, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleListSpecs, handleSelectSpec, handleListItemSets, handleSelectItemSet } from "../handlers/luaHandlers.js";
 import { handleAddItem, handleGetEquippedItems, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems } from "../handlers/itemSkillHandlers.js";
@@ -647,6 +647,12 @@ export async function routeToolCall(
       const maxResults = (args?.max_results as number) || 10;
       return await handleGetPassiveUpgrades(upgradesContext, focus, maxResults);
     }
+
+    case "suggest_masteries":
+      return await handleSuggestMasteries({
+        getLuaClient: deps.getLuaClient,
+        ensureLuaClient: deps.ensureLuaClient,
+      });
 
     default:
       throw new Error(`Unknown tool: ${name}`);

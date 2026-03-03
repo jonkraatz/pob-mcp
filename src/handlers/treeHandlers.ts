@@ -414,6 +414,74 @@ export async function handleGetPassiveUpgrades(
   };
 }
 
+export async function handleSuggestMasteries(context: PassiveUpgradesContext) {
+  await context.ensureLuaClient();
+  const luaClient = context.getLuaClient();
+  if (!luaClient) throw new Error('Lua bridge not active. Use lua_load_build first.');
+
+  const data = await (luaClient as any).getMasteryOptions();
+  const masteries: any[] = data?.masteries ?? [];
+
+  if (masteries.length === 0) {
+    return {
+      content: [{ type: 'text' as const, text: '=== Mastery Suggestions ===\n\nNo allocated mastery nodes found in the current build.\n' }],
+    };
+  }
+
+  // Get base stats for scoring
+  const baseStats = await luaClient.getStats(['TotalDPS', 'CombinedDPS', 'MinionTotalDPS', 'TotalEHP', 'Life']);
+  const baseDPS = (baseStats.CombinedDPS as number) || (baseStats.TotalDPS as number) || (baseStats.MinionTotalDPS as number) || 1;
+  const baseEHP = (baseStats.TotalEHP as number) || (baseStats.Life as number) || 1;
+
+  // Current mastery effect map: { nodeId: effectId }
+  const currentMasteryEffects: Record<number, number> = {};
+  for (const m of masteries) {
+    if (m.allocatedEffect != null) {
+      currentMasteryEffects[m.nodeId] = m.allocatedEffect;
+    }
+  }
+
+  let output = '=== Mastery Node Suggestions ===\n\n';
+
+  for (const mastery of masteries) {
+    output += `**${mastery.nodeName}** (node ${mastery.nodeId})\n`;
+    if (mastery.allocatedEffect != null) {
+      const current = mastery.availableEffects.find((e: any) => e.effectId === mastery.allocatedEffect);
+      output += `  Current: ${current?.stat ?? mastery.allocatedEffect}\n`;
+    } else {
+      output += `  Current: (none selected)\n`;
+    }
+
+    // Simulate each effect choice
+    interface ScoredEffect {
+      stat: string;
+      dpsDelta: number;
+      ehpDelta: number;
+    }
+    const scored: ScoredEffect[] = [];
+    for (const effect of mastery.availableEffects) {
+      try {
+        const newMasteryEffects = { ...currentMasteryEffects, [mastery.nodeId]: effect.effectId };
+        const out = await luaClient.calcWith({ masteryEffects: newMasteryEffects });
+        if (!out) continue;
+        const outDPS = (out.CombinedDPS as number) || (out.TotalDPS as number) || (out.MinionTotalDPS as number) || baseDPS;
+        const outEHP = (out.TotalEHP as number) || (out.Life as number) || baseEHP;
+        scored.push({ stat: effect.stat, dpsDelta: outDPS - baseDPS, ehpDelta: outEHP - baseEHP });
+      } catch { /* skip effects that fail simulation */ }
+    }
+
+    scored.sort((a, b) => (b.dpsDelta + b.ehpDelta * 0.5) - (a.dpsDelta + a.ehpDelta * 0.5));
+    for (const s of scored.slice(0, 3)) {
+      const dpsStr = s.dpsDelta !== 0 ? ` | DPS Delta${s.dpsDelta > 0 ? '+' : ''}${Math.round(s.dpsDelta)}` : '';
+      const ehpStr = s.ehpDelta !== 0 ? ` | EHP Delta${s.ehpDelta > 0 ? '+' : ''}${Math.round(s.ehpDelta)}` : '';
+      output += `  - ${s.stat}${dpsStr}${ehpStr}\n`;
+    }
+    output += '\n';
+  }
+
+  return { content: [{ type: 'text' as const, text: output }] };
+}
+
 // Helper function
 function formatTreeComparison(comparison: TreeComparison): string {
   let output = `=== Passive Tree Comparison ===\n\n`;
