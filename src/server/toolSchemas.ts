@@ -1482,6 +1482,14 @@ export function getBuildGoalsToolSchemas(): any[] {
       },
     },
     {
+      name: "analyze_build_cluster_jewels",
+      description: "Analyze the cluster jewels currently equipped in the build, evaluate which notables synergize with the build archetype, and flag wasted notables",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
       name: "suggest_watchers_eye",
       description: "Recommend valuable Watcher's Eye jewel mods based on the build's active auras, ranked by tier (S/A/B) with best combo suggestions",
       inputSchema: {

@@ -37,7 +37,8 @@ const HIGH_IMPACT_TOOLS = [
   'snapshot_build',
   'restore_snapshot',
   'suggest_masteries',
-  'check_boss_readiness'
+  'check_boss_readiness',
+  'analyze_build_cluster_jewels'
 ];
 
 export class ToolGate {

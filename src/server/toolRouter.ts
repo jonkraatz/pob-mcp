@@ -27,7 +27,7 @@ import { handleExportBuild, handleSaveTree, handleSnapshotBuild, handleListSnaps
 import { handleAnalyzeSkillLinks, handleSuggestSupportGems, handleCompareGemSetups, handleValidateGemQuality, handleFindOptimalLinks } from "../handlers/skillGemHandlers.js";
 import { handleSearchTradeItems, handleGetItemPrice, handleGetLeagues, handleSearchStats, handleFindItemUpgrades, handleFindResistanceGear, handleCompareTradeItems } from "../handlers/tradeHandlers.js";
 import { handleGetCurrencyRates, handleFindArbitrage, handleCalculateTradingProfit } from "../handlers/poeNinjaHandlers.js";
-import { handleSearchClusterJewels, handleAnalyzeClusterJewels } from "../handlers/clusterJewelHandlers.js";
+import { handleSearchClusterJewels, handleAnalyzeClusterJewels, handleAnalyzeBuildClusterJewels } from "../handlers/clusterJewelHandlers.js";
 import { handleGenerateShoppingList } from "../handlers/shoppingListHandlers.js";
 import { handlePlanLeveling } from "../handlers/levelingHandlers.js";
 import { handleCheckBossReadiness } from "../handlers/bossReadinessHandlers.js";
@@ -650,6 +650,12 @@ export async function routeToolCall(
       const maxResults = (args?.max_results as number) || 10;
       return await handleGetPassiveUpgrades(upgradesContext, focus, maxResults);
     }
+
+    case "analyze_build_cluster_jewels":
+      return await handleAnalyzeBuildClusterJewels({
+        getLuaClient: deps.getLuaClient,
+        ensureLuaClient: deps.ensureLuaClient,
+      });
 
     case "suggest_watchers_eye":
       return await handleSuggestWatchersEye({
