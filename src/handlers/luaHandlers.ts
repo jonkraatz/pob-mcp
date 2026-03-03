@@ -374,7 +374,7 @@ export async function handleLuaSetTree(context: LuaHandlerContext, args: any) {
       classId,
       ascendClassId,
       secondaryAscendClassId,
-      nodes: args.nodes,
+      nodes: (args.nodes as string[]).map(Number),
       masteryEffects: args.masteryEffects,
       treeVersion,
     });
@@ -489,9 +489,8 @@ export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes
     if (removedCount)  text += `  Removed: ${removedCount} node(s)\n`;
     text += `  Total allocated: ${actualCount} nodes\n`;
 
-    const dropped = addedCount - (Array.isArray(tree?.nodes) ? tree.nodes.length - (actualCount as number - addedCount + removedCount) : 0);
-    if (dropped > 0) {
-      text += `\n⚠️  Some added nodes may have been dropped (not connected or invalid IDs).`;
+    if (addedCount > 0) {
+      text += `\n⚠️  If total count is lower than expected, some nodes may have been dropped (not connected or invalid IDs).`;
     }
 
     return {

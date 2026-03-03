@@ -293,7 +293,7 @@ export async function handleGetPassiveUpgrades(
   // Step 1: get current base stats and issues to determine search keywords
   const { issues, stats: baseStats } = await handleGetBuildIssues(context);
 
-  const baseDPS = (baseStats.CombinedDPS as number) || (baseStats.TotalDPS as number) || 1;
+  const baseDPS = (baseStats.CombinedDPS as number) || (baseStats.TotalDPS as number) || (baseStats.MinionTotalDPS as number) || 1;
   const baseEHP = (baseStats.TotalEHP as number) || (baseStats.Life as number) || 1;
 
   // Step 2: map focus + issues to search keywords
@@ -360,7 +360,7 @@ export async function handleGetPassiveUpgrades(
       const out = await luaClient.calcWith({ addNodes: [node.id] });
       if (!out) continue;
 
-      const outDPS = (out.CombinedDPS as number) || (out.TotalDPS as number) || baseDPS;
+      const outDPS = (out.CombinedDPS as number) || (out.TotalDPS as number) || (out.MinionTotalDPS as number) || baseDPS;
       const outEHP = (out.TotalEHP as number) || (out.Life as number) || baseEHP;
 
       const dpsDelta = outDPS - baseDPS;

@@ -175,7 +175,7 @@ export async function handleOptimizeSkillLinks(
             slot: group.slot,
             enabled: group.enabled,
             isMainSkill: group.index === skillData.mainSocketGroup,
-            gems: group.skills?.map((skillName: string) => ({ name: skillName })) || [],
+            gems: group.gems || group.skills?.map((skillName: string) => ({ name: skillName })) || [],
             includeInFullDPS: group.includeInFullDPS,
           }));
         }
@@ -200,8 +200,8 @@ export async function handleOptimizeSkillLinks(
       }
     }
 
-    // Fall back to XML if needed
-    if (buildName) {
+    // Fall back to XML if Lua data was unavailable
+    if (buildName && skillGroups.length === 0) {
       const build = await context.buildService.readBuild(buildName);
 
       buildArchetype = inferBuildArchetype(
@@ -383,7 +383,7 @@ export async function handleCreateBudgetBuild(
     output += '2. Grab life/ES nodes along the way\n';
     output += '3. Get important keystones for your build\n';
     output += '4. Fill in jewel sockets if you have good jewels\n';
-    output += '\nUse the `plan_tree` or `suggest_optimal_nodes` tools for specific recommendations!\n';
+    output += '\nUse the `suggest_optimal_nodes` or `get_passive_upgrades` tools for specific recommendations!\n';
     output += '\n';
 
     // Leveling tips

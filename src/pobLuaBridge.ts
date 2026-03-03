@@ -18,7 +18,7 @@ export class PoBLuaApiClient {
   private options: PoBLuaApiOptions;
   private buffer = "";
   private ready = false;
-  private pending: { resolve: (v: Json) => void; reject: (e: Error) => void } | null = null;
+  private isSending = false;
   private killed = false;
   private dataEmitter = new EventEmitter();
 
@@ -85,10 +85,7 @@ export class PoBLuaApiClient {
     this.proc.on("error", (err: Error) => {
       spawnError = err;
       this.killed = true;
-      if (this.pending) {
-        this.pending.reject(err);
-        this.pending = null;
-      }
+      this.dataEmitter.emit("error", err);
     });
 
     this.proc.stdout.on("data", (chunk: string) => this.onStdout(chunk));
@@ -99,10 +96,7 @@ export class PoBLuaApiClient {
 
     this.proc.on("exit", (code, signal) => {
       this.killed = true;
-      if (this.pending) {
-        this.pending.reject(new Error(`PoB API exited: code=${code} signal=${signal}`));
-        this.pending = null;
-      }
+      this.dataEmitter.emit("error", new Error(`PoB API exited: code=${code} signal=${signal}`));
     });
 
     // Wait for ready banner (skip non-JSON lines like log messages)
@@ -160,7 +154,9 @@ export class PoBLuaApiClient {
   }
 
   private onStdout(chunk: string) {
-    console.error("[PoB API stdout]", chunk.trim());
+    if (process.env.POB_DEBUG === "true") {
+      console.error("[PoB API stdout]", chunk.trim());
+    }
     this.buffer += chunk;
     this.dataEmitter.emit("data");
   }
@@ -185,15 +181,22 @@ export class PoBLuaApiClient {
         return false;
       };
 
+      const onError = (err: Error) => {
+        cleanup();
+        reject(err);
+      };
+
       const cleanup = () => {
         clearTimeout(timer);
         this.dataEmitter.off("data", onData);
+        this.dataEmitter.off("error", onError);
       };
 
       const onData = () => { tryRead(); };
 
       if (!tryRead()) {
         this.dataEmitter.on("data", onData);
+        this.dataEmitter.on("error", onError);
       }
     });
   }
@@ -202,35 +205,40 @@ export class PoBLuaApiClient {
     if (!this.proc || !this.proc.stdin) throw new Error("Process not started");
     if (this.killed) throw new Error("PoB API exited");
     if (!this.ready) throw new Error("Process not ready");
-    if (this.pending) throw new Error("Concurrent request not supported");
+    if (this.isSending) throw new Error("Concurrent request not supported");
 
-    this.proc.stdin.write(JSON.stringify(obj) + "\n");
+    this.isSending = true;
+    try {
+      this.proc.stdin.write(JSON.stringify(obj) + "\n");
 
-    // Read lines until we get valid JSON response
-    // Skip non-JSON lines (like "LOADING", warnings, etc.)
-    let attempts = 0;
-    const maxAttempts = 100;
+      // Read lines until we get valid JSON response
+      // Skip non-JSON lines (like "LOADING", warnings, etc.)
+      let attempts = 0;
+      const maxAttempts = 100;
 
-    while (attempts < maxAttempts) {
-      const line = await this.readLineWithTimeout(this.options.timeoutMs);
-      attempts++;
+      while (attempts < maxAttempts) {
+        const line = await this.readLineWithTimeout(this.options.timeoutMs);
+        attempts++;
 
-      // Skip empty lines or lines that don't look like JSON (debug messages, etc.)
-      if (!line.trim() || !line.trim().startsWith('{')) {
-        continue;
+        // Skip empty lines or lines that don't look like JSON (debug messages, etc.)
+        if (!line.trim() || !line.trim().startsWith('{')) {
+          continue;
+        }
+
+        // Try to parse as JSON
+        try {
+          const res = JSON.parse(line);
+          return res;
+        } catch (e) {
+          // Not valid JSON, keep looking
+          continue;
+        }
       }
 
-      // Try to parse as JSON
-      try {
-        const res = JSON.parse(line);
-        return res;
-      } catch (e) {
-        // Not valid JSON, keep looking
-        continue;
-      }
+      throw new Error(`Failed to receive valid JSON response after ${maxAttempts} lines`);
+    } finally {
+      this.isSending = false;
     }
-
-    throw new Error(`Failed to receive valid JSON response after ${maxAttempts} lines`);
   }
 
   async ping(): Promise<boolean> {

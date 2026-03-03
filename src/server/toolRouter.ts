@@ -195,14 +195,14 @@ export async function routeToolCall(
       return await handleListSpecs(luaContext);
 
     case "select_spec":
-      if (!args?.index) throw new Error("Missing index");
+      if (args?.index == null) throw new Error("Missing index");
       return await handleSelectSpec(luaContext, args.index as number);
 
     case "list_item_sets":
       return await handleListItemSets(luaContext);
 
     case "select_item_set":
-      if (!args?.id) throw new Error("Missing id");
+      if (args?.id == null) throw new Error("Missing id");
       return await handleSelectItemSet(luaContext, args.id as number);
 
     // Phase 9: Configuration Tools

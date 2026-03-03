@@ -239,7 +239,7 @@ function analyzeAvoidance(stats: Record<string, any>): AvoidanceAnalysis {
     return 0;
   };
 
-  const spellSuppression = getStat('SpellSuppressionChance');
+  const spellSuppression = getStat('EffectiveSpellSuppressionChance') || getStat('SpellSuppressionChance');
   const dodge = getStat('DodgeChance') || getStat('AttackDodgeChance');
   const spellDodge = getStat('SpellDodgeChance');
   const block = getStat('BlockChance');

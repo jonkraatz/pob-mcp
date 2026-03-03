@@ -10,7 +10,7 @@ const ISSUES_FIELDS = [
   'Life', 'LifeUnreserved', 'EnergyShield', 'Mana', 'ManaUnreserved',
   'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist',
   'FireResistOverCap', 'ColdResistOverCap', 'LightningResistOverCap',
-  'SpellSuppressionChance',
+  'SpellSuppressionChance', 'EffectiveSpellSuppressionChance',
   // DPS fields needed by handleGetPassiveUpgrades for baseDPS scoring
   'TotalDPS', 'CombinedDPS', 'MinionTotalDPS',
   // EHP field needed by handleGetPassiveUpgrades for baseEHP scoring
@@ -62,8 +62,8 @@ export async function handleGetBuildIssues(context: BuildGoalsHandlerContext) {
     issues.push({ severity: 'error', category: 'reservation', message: `Mana over-reserved by ${Math.abs(manaUnreserved)}` });
   }
 
-  // Spell suppression (only flag if build has any invested)
-  const supp = (stats.SpellSuppressionChance as number) ?? 0;
+  // Spell suppression (only flag if build has any invested; use effective value for cap check)
+  const supp = (stats.EffectiveSpellSuppressionChance as number) ?? (stats.SpellSuppressionChance as number) ?? 0;
   if (supp > 0 && supp < 100) {
     issues.push({ severity: 'info', category: 'defence', message: `Spell suppression ${supp}% — not capped at 100%` });
   }
