@@ -1,6 +1,7 @@
 import type { BuildService } from "../services/buildService.js";
 import type { BuildExportService } from "../services/buildExportService.js";
 import type { PoBLuaApiClient } from "../pobLuaBridge.js";
+import type { ExportContext } from "../utils/contextBuilder.js";
 
 export interface ExportHandlerContext {
   buildService: BuildService;
@@ -177,4 +178,74 @@ export async function handleRestoreSnapshot(
       },
     ],
   };
+}
+
+export async function handleExportBuildSummary(context: ExportContext) {
+  const luaClient = context.luaClient;
+  if (!luaClient) throw new Error('Lua bridge not active. Use lua_load_build first.');
+
+  const [infoResult, statsResult, skillsResult, treeResult] = await Promise.allSettled([
+    luaClient.getBuildInfo(),
+    luaClient.getStats([
+      'Life', 'EnergyShield', 'Mana', 'ManaUnreserved',
+      'TotalDPS', 'CombinedDPS', 'MinionTotalDPS',
+      'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist',
+      'Armour', 'Evasion', 'PhysicalDamageReduction', 'TotalEHP',
+      'LifeRegen', 'SpellSuppressionChance', 'BlockChance',
+    ]),
+    luaClient.getSkills(),
+    luaClient.getTree(),
+  ]);
+
+  const info = infoResult.status === 'fulfilled' ? infoResult.value : null;
+  const stats = statsResult.status === 'fulfilled' ? statsResult.value : {};
+  const skills = skillsResult.status === 'fulfilled' ? skillsResult.value : null;
+  const tree = treeResult.status === 'fulfilled' ? treeResult.value : null;
+
+  const classNames = ['Scion', 'Marauder', 'Ranger', 'Witch', 'Duelist', 'Templar', 'Shadow'];
+  const className = (tree?.classId != null ? classNames[tree.classId] : null) || info?.class || 'Unknown';
+  const buildName = info?.name || 'Unnamed Build';
+  const level = info?.level || '?';
+  const ascendancy = info?.ascendancy || '';
+
+  const dps = Number(stats.CombinedDPS || stats.TotalDPS || stats.MinionTotalDPS || 0);
+  const dpsLabel = (stats.MinionTotalDPS && !stats.TotalDPS) ? 'Minion DPS' : 'DPS';
+
+  let output = `# ${buildName}\n\n`;
+  output += `**Class:** ${className}${ascendancy ? ` (${ascendancy})` : ''}  \n`;
+  output += `**Level:** ${level}\n\n`;
+
+  output += `## Key Stats\n\n`;
+  output += `| Stat | Value |\n|------|-------|\n`;
+  output += `| Life | ${Number(stats.Life ?? 0).toLocaleString()} |\n`;
+  if (Number(stats.EnergyShield ?? 0) > 100) {
+    output += `| Energy Shield | ${Number(stats.EnergyShield).toLocaleString()} |\n`;
+  }
+  output += `| ${dpsLabel} | ${Math.round(dps).toLocaleString()} |\n`;
+  output += `| Total EHP | ${Number(stats.TotalEHP ?? 0).toLocaleString()} |\n`;
+  output += `| Fire/Cold/Light Resist | ${stats.FireResist ?? '?'}% / ${stats.ColdResist ?? '?'}% / ${stats.LightningResist ?? '?'}% |\n`;
+  output += `| Chaos Resist | ${stats.ChaosResist ?? '?'}% |\n`;
+  if (Number(stats.Armour ?? 0) > 0) output += `| Armour | ${Number(stats.Armour).toLocaleString()} |\n`;
+  if (Number(stats.Evasion ?? 0) > 0) output += `| Evasion | ${Number(stats.Evasion).toLocaleString()} |\n`;
+  if (Number(stats.BlockChance ?? 0) > 0) output += `| Block | ${stats.BlockChance}% |\n`;
+  if (Number(stats.SpellSuppressionChance ?? 0) > 0) output += `| Spell Suppression | ${stats.SpellSuppressionChance}% |\n`;
+  output += '\n';
+
+  // Main skill setup
+  const mainGroup = skills?.groups?.find((g: any) => g.index === skills.mainSocketGroup) || skills?.groups?.[0];
+  if (mainGroup) {
+    const gemNames = (mainGroup.gems || []).map((g: any) => g.name || g).filter(Boolean);
+    output += `## Main Skill\n\n`;
+    output += `**${mainGroup.label || 'Main'}:** ${gemNames.join(' + ')}\n\n`;
+  }
+
+  // Keystone passives
+  if (Array.isArray(tree?.keystones) && tree.keystones.length > 0) {
+    output += `## Keystones\n\n`;
+    output += tree.keystones.map((k: string) => `- ${k}`).join('\n') + '\n\n';
+  }
+
+  output += `---\n_Generated with pob-mcp-server_\n`;
+
+  return { content: [{ type: 'text' as const, text: output }] };
 }
