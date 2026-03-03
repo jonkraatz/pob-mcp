@@ -332,7 +332,11 @@ class PoBMCPServer {
                                 'optimize_tree', 'analyze_items', 'optimize_skill_links',
                                 'create_budget_build', 'search_trade_items', 'find_item_upgrades',
                                 'find_resistance_gear', 'compare_trade_items', 'search_cluster_jewels',
-                                'generate_shopping_list'];
+                                'generate_shopping_list',
+                                // Additional tools that can produce large responses:
+                                'validate_build', 'get_passive_upgrades', 'analyze_skill_links',
+                                'suggest_support_gems', 'find_optimal_links', 'compare_gem_setups',
+                                'lua_get_stats'];
 
         if (truncatedTools.includes(name)) {
           return wrapWithTruncation(result);

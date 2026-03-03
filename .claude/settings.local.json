@@ -26,7 +26,8 @@
       "Bash(node -e:*)",
       "Bash(npm install bottleneck)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:poe.ninja)"
+      "WebFetch(domain:poe.ninja)",
+      "Bash(python3:*)"
     ],
     "deny": [],
     "ask": []

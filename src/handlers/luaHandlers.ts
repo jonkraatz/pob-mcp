@@ -196,14 +196,25 @@ export async function handleLuaGetStats(context: LuaHandlerContext, category?: s
         const offenseKeys = ['DPS', 'Damage', 'Speed', 'Crit', 'Hit', 'Accuracy', 'Cost'];
         const defenseKeys = ['Life', 'Mana', 'Energy', 'Shield', 'Resist', 'Block', 'Dodge', 'Evasion', 'Armour', 'Ward', 'EHP', 'Maximum', 'Regen', 'Leech', 'Recovery'];
 
-        const offense = entries.filter(([key]) => offenseKeys.some(ok => key.includes(ok)));
-        const defense = entries.filter(([key]) => defenseKeys.some(dk => key.includes(dk)));
-        const other = entries.filter(([key]) => !offense.some(([ok]) => ok === key) && !defense.some(([dk]) => dk === key));
+        // Sort offense so DPS metrics appear first, then apply cap
+        const offenseAll = entries.filter(([key]) => offenseKeys.some(ok => key.includes(ok)));
+        offenseAll.sort(([keyA], [keyB]) => {
+          const isDpsA = keyA.includes('TotalDPS') || keyA.includes('CombinedDPS') || keyA.includes('MinionTotalDPS') ? -1 : 0;
+          const isDpsB = keyB.includes('TotalDPS') || keyB.includes('CombinedDPS') || keyB.includes('MinionTotalDPS') ? -1 : 0;
+          return isDpsA - isDpsB;
+        });
+        const offense = offenseAll.slice(0, 15);
+        const defenseAll = entries.filter(([key]) => defenseKeys.some(dk => key.includes(dk)));
+        const defense = defenseAll.slice(0, 15);
+        const other = entries.filter(([key]) => !offenseAll.some(([ok]) => ok === key) && !defenseAll.some(([dk]) => dk === key));
 
         if (offense.length > 0) {
           text += "**Offense:**\n";
           for (const [key, value] of offense) {
             text += `${key}: ${value}\n`;
+          }
+          if (offenseAll.length > 15) {
+            text += `  ... use category='offense' for full list (+${offenseAll.length - 15} more)\n`;
           }
           text += '\n';
         }
@@ -212,6 +223,9 @@ export async function handleLuaGetStats(context: LuaHandlerContext, category?: s
           text += "**Defense:**\n";
           for (const [key, value] of defense) {
             text += `${key}: ${value}\n`;
+          }
+          if (defenseAll.length > 15) {
+            text += `  ... use category='defense' for full list (+${defenseAll.length - 15} more)\n`;
           }
           text += '\n';
         }
@@ -254,7 +268,7 @@ export async function handleLuaGetStats(context: LuaHandlerContext, category?: s
   }
 }
 
-export async function handleLuaGetTree(context: LuaHandlerContext) {
+export async function handleLuaGetTree(context: LuaHandlerContext, includeNodeIds?: boolean) {
   try {
     await context.ensureLuaClient();
 
@@ -278,7 +292,11 @@ export async function handleLuaGetTree(context: LuaHandlerContext) {
 
       if (tree.nodes && Array.isArray(tree.nodes)) {
         text += `\nAllocated Nodes: ${tree.nodes.length} nodes\n`;
-        text += `Node IDs: ${tree.nodes.join(', ')}\n`;
+        if (includeNodeIds) {
+          text += `Node IDs: ${tree.nodes.join(', ')}\n`;
+        } else {
+          text += `Node IDs: [omitted — use include_node_ids=true to see full list]\n`;
+        }
       }
 
       if (tree.masteryEffects && typeof tree.masteryEffects === 'object') {

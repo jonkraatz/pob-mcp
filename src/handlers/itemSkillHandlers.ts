@@ -143,7 +143,7 @@ export async function handleToggleFlask(
   }
 }
 
-export async function handleGetSkillSetup(context: ItemSkillHandlerContext) {
+export async function handleGetSkillSetup(context: ItemSkillHandlerContext, mainOnly: boolean = true) {
   try {
     await context.ensureLuaClient();
 
@@ -164,7 +164,16 @@ export async function handleGetSkillSetup(context: ItemSkillHandlerContext) {
     if (!skillData.groups || skillData.groups.length === 0) {
       text += "No skill groups found.\n";
     } else {
-      for (const group of skillData.groups) {
+      const totalGroups = skillData.groups.length;
+      const groups = mainOnly
+        ? skillData.groups.filter((g: any) => g.index === skillData.mainSocketGroup)
+        : skillData.groups;
+
+      if (mainOnly && totalGroups > 1) {
+        text += `(Showing main skill group only. Use main_only=false to see all ${totalGroups} groups.)\n\n`;
+      }
+
+      for (const group of groups) {
         const isMain = group.index === skillData.mainSocketGroup;
         text += `**Group ${group.index}${isMain ? ' (MAIN)' : ''}**\n`;
         if (group.label) {

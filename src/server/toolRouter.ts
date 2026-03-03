@@ -175,7 +175,7 @@ export async function routeToolCall(
       return await handleLuaGetStats(luaContext, args?.category as string | undefined);
 
     case "lua_get_tree":
-      return await handleLuaGetTree(luaContext);
+      return await handleLuaGetTree(luaContext, args?.include_node_ids as boolean | undefined);
 
     case "lua_get_build_info":
       return await handleLuaGetBuildInfo(luaContext);
@@ -258,7 +258,7 @@ export async function routeToolCall(
       return await handleToggleFlask(itemSkillContext, args.flask_number as number, args.active as boolean);
 
     case "get_skill_setup":
-      return await handleGetSkillSetup(itemSkillContext);
+      return await handleGetSkillSetup(itemSkillContext, args?.main_only !== false);
 
     case "set_main_skill":
       if (!args) throw new Error("Missing arguments");

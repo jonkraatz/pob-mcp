@@ -272,7 +272,12 @@ export function getLuaToolSchemas(): any[] {
       description: "Get passive tree allocation from currently loaded build",
       inputSchema: {
         type: "object",
-        properties: {},
+        properties: {
+          include_node_ids: {
+            type: "boolean",
+            description: "Include the full list of allocated node IDs in the response (default: false). Omit unless you need to pass node IDs to another tool.",
+          },
+        },
       },
     },
     {
@@ -409,7 +414,12 @@ export function getLuaToolSchemas(): any[] {
       description: "Get current skill gem setup",
       inputSchema: {
         type: "object",
-        properties: {},
+        properties: {
+          main_only: {
+            type: "boolean",
+            description: "Only show the main socket group (default: true). Set to false to see all socket groups.",
+          },
+        },
       },
     },
     {
