@@ -27,7 +27,9 @@
       "Bash(npm install bottleneck)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:poe.ninja)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "mcp__pob__list_builds",
+      "mcp__pob__lua_start"
     ],
     "deny": [],
     "ask": []
