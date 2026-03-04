@@ -114,20 +114,34 @@ export class BuildService {
       summary += "\n";
     }
 
-    // Items
-    if (build.Items?.ItemSet?.Slot) {
-      summary += "=== Items ===\n";
-      const slots = Array.isArray(build.Items.ItemSet.Slot)
-        ? build.Items.ItemSet.Slot
-        : [build.Items.ItemSet.Slot];
-
-      for (const slot of slots) {
-        if (slot.Item) {
-          const itemLines = slot.Item.split("\n");
-          summary += `${slot.name}: ${itemLines[0]}\n`;
+    // Items — build an id→text map from the Item array, then render by slot
+    if (build.Items) {
+      const rawItems = build.Items.Item
+        ? (Array.isArray(build.Items.Item) ? build.Items.Item : [build.Items.Item])
+        : [];
+      const itemMap = new Map<string, string>();
+      for (const item of rawItems) {
+        if (item.id && item['#text']) {
+          itemMap.set(item.id, item['#text']);
         }
       }
-      summary += "\n";
+
+      const slots = build.Items.ItemSet?.Slot
+        ? (Array.isArray(build.Items.ItemSet.Slot)
+            ? build.Items.ItemSet.Slot
+            : [build.Items.ItemSet.Slot])
+        : [];
+
+      const equippedSlots = slots.filter(s => s.itemId && itemMap.has(s.itemId));
+      if (equippedSlots.length > 0) {
+        summary += "=== Items ===\n";
+        for (const slot of equippedSlots) {
+          const text = itemMap.get(slot.itemId!)!;
+          const firstLine = text.split("\n").find(l => l.trim()) || "Unknown Item";
+          summary += `${slot.name}: ${firstLine}\n`;
+        }
+        summary += "\n";
+      }
     }
 
     // Notes

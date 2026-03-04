@@ -117,12 +117,11 @@ export async function routeToolCall(
       );
 
     case "get_nearby_nodes":
-      if (!args) throw new Error("Missing arguments");
       return await handleGetNearbyNodes(
         treeContext,
-        args.build_name as string,
-        args.max_distance as number | undefined,
-        args.filter as string | undefined
+        args?.build_name as string | undefined,
+        args?.max_distance as number | undefined,
+        args?.filter as string | undefined
       );
 
     case "find_path_to_node":

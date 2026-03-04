@@ -7,6 +7,7 @@ import { handleGetBuildIssues } from "./buildGoalsHandlers.js";
 export interface TreeHandlerContext {
   buildService: BuildService;
   treeService: TreeService;
+  getLuaClient?: () => PoBLuaApiClient | null;
 }
 
 export interface PassiveUpgradesContext {
@@ -78,15 +79,45 @@ export async function handleCompareTrees(
 
 export async function handleGetNearbyNodes(
   context: TreeHandlerContext,
-  buildName: string,
+  buildName: string | undefined,
   maxDistance?: number,
   filter?: string
 ) {
   try {
-    const build = await context.buildService.readBuild(buildName);
-    const allocatedNodeIds = context.buildService.parseAllocatedNodes(build);
+    let allocatedNodeIds: string[] = [];
+    let treeVersion = 'Unknown';
+
+    // Try file-based path first
+    if (buildName) {
+      try {
+        const build = await context.buildService.readBuild(buildName);
+        allocatedNodeIds = context.buildService.parseAllocatedNodes(build);
+        treeVersion = context.buildService.extractBuildVersion(build);
+      } catch {
+        // Fall through to Lua fallback
+      }
+    }
+
+    // Lua bridge fallback when no file or file read failed
+    if (allocatedNodeIds.length === 0 && context.getLuaClient) {
+      const luaClient = context.getLuaClient();
+      if (luaClient) {
+        const treeResult = await luaClient.getTree();
+        allocatedNodeIds = (treeResult.nodes || []).map(String);
+        treeVersion = treeResult.treeVersion || 'Unknown';
+      }
+    }
+
+    if (allocatedNodeIds.length === 0) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: "No allocated nodes found. Provide a build_name or load a build with lua_load_build first.",
+        }],
+      };
+    }
+
     const allocatedNodes = new Set<string>(allocatedNodeIds);
-    const treeVersion = context.buildService.extractBuildVersion(build);
     const treeData = await context.treeService.getTreeData(treeVersion);
 
     const distance = maxDistance || 3;

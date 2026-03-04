@@ -527,7 +527,7 @@ export class SkillGemService {
         name: "Added Lightning Damage Support",
         type: "support",
         tags: ["Lightning", "Support"],
-        synergies: ["Attack", "Lightning"],
+        synergies: ["Attack", "Lightning", "Minion"],
         cost_tier: "common",
         awakened: {
           base_gem: "Added Lightning Damage Support",
@@ -539,14 +539,14 @@ export class SkillGemService {
         name: "Awakened Added Lightning Damage Support",
         type: "support",
         tags: ["Lightning", "Support"],
-        synergies: ["Attack", "Lightning"],
+        synergies: ["Attack", "Lightning", "Minion"],
         cost_tier: "very_rare",
       },
       {
         name: "Lightning Penetration Support",
         type: "support",
         tags: ["Lightning", "Support"],
-        synergies: ["Lightning", "Elemental"],
+        synergies: ["Lightning", "Elemental", "Minion"],
         cost_tier: "common",
         awakened: {
           base_gem: "Lightning Penetration Support",
@@ -558,7 +558,7 @@ export class SkillGemService {
         name: "Awakened Lightning Penetration Support",
         type: "support",
         tags: ["Lightning", "Support"],
-        synergies: ["Lightning", "Elemental"],
+        synergies: ["Lightning", "Elemental", "Minion"],
         cost_tier: "very_rare",
       },
       {
@@ -663,6 +663,111 @@ export class SkillGemService {
         synergies: ["Attack", "Spell", "Critical"],
         cost_tier: "common",
       },
+      // Minion Support Gems
+      {
+        name: "Minion Damage Support",
+        type: "support",
+        tags: ["Minion", "Support"],
+        synergies: ["Minion"],
+        cost_tier: "common",
+        awakened: {
+          base_gem: "Minion Damage Support",
+          max_level: 5,
+          bonus_at_5: "Supported Skills deal 10% increased Minion Damage",
+        },
+      },
+      {
+        name: "Awakened Minion Damage Support",
+        type: "support",
+        tags: ["Minion", "Support"],
+        synergies: ["Minion"],
+        cost_tier: "very_rare",
+      },
+      {
+        name: "Feeding Frenzy Support",
+        type: "support",
+        tags: ["Minion", "Support"],
+        synergies: ["Minion"],
+        cost_tier: "common",
+      },
+      {
+        name: "Predator Support",
+        type: "support",
+        tags: ["Minion", "Support"],
+        synergies: ["Minion"],
+        cost_tier: "common",
+      },
+      {
+        name: "Elemental Army Support",
+        type: "support",
+        tags: ["Minion", "Support"],
+        synergies: ["Minion", "Elemental"],
+        cost_tier: "common",
+      },
+      {
+        name: "Vicious Projectiles Support",
+        type: "support",
+        tags: ["Minion", "Projectile", "Support"],
+        synergies: ["Minion", "Projectile"],
+        cost_tier: "common",
+      },
+      // Minion Active Gems (so archetype detection works)
+      {
+        name: "Summon Skeletons",
+        type: "active",
+        tags: ["Minion", "Spell"],
+        synergies: ["Minion"],
+        cost_tier: "common",
+      },
+      {
+        name: "Summon Raging Spirit",
+        type: "active",
+        tags: ["Minion", "Spell", "Fire"],
+        synergies: ["Minion"],
+        cost_tier: "common",
+      },
+      {
+        name: "Raise Zombie",
+        type: "active",
+        tags: ["Minion", "Spell"],
+        synergies: ["Minion"],
+        cost_tier: "common",
+      },
+      {
+        name: "Raise Spectre",
+        type: "active",
+        tags: ["Minion", "Spell"],
+        synergies: ["Minion"],
+        cost_tier: "common",
+      },
+      {
+        name: "Animate Guardian",
+        type: "active",
+        tags: ["Minion", "Spell"],
+        synergies: ["Minion"],
+        cost_tier: "common",
+      },
+      {
+        name: "Summon Holy Relic",
+        type: "active",
+        tags: ["Minion", "Spell"],
+        synergies: ["Minion"],
+        cost_tier: "common",
+      },
+      {
+        name: "Summon Holy Relic of Conviction",
+        type: "active",
+        tags: ["Minion", "Spell", "Lightning"],
+        synergies: ["Minion", "Lightning"],
+        cost_tier: "common",
+      },
+      {
+        name: "Summon Phantasm Support",
+        type: "support",
+        tags: ["Minion", "Support"],
+        synergies: ["Minion"],
+        cost_tier: "uncommon",
+      },
     ];
 
     for (const gem of gems) {
@@ -766,6 +871,58 @@ export class SkillGemService {
           },
         ],
         avoid_supports: ["Brutality Support", "Elemental Damage with Attacks Support"],
+      },
+      {
+        name: "Minion Summoner",
+        description: "Build centered on summoned minions dealing damage",
+        required_tags: ["Minion"],
+        recommended_supports: [
+          {
+            gem: "Minion Damage Support",
+            priority: 1,
+            reasoning: "Core more multiplier for all minion damage",
+          },
+          {
+            gem: "Feeding Frenzy Support",
+            priority: 2,
+            reasoning: "Onslaught for minions and a damage buff",
+          },
+          {
+            gem: "Elemental Army Support",
+            priority: 3,
+            reasoning: "Resistance exposure + elemental damage for minions",
+          },
+          {
+            gem: "Predator Support",
+            priority: 4,
+            reasoning: "Focus fire on rare/unique enemies for bossing",
+          },
+          {
+            gem: "Summon Phantasm Support",
+            priority: 5,
+            reasoning: "Free additional minions from spell casts",
+          },
+          {
+            gem: "Lightning Penetration Support",
+            priority: 6,
+            reasoning: "Essential for lightning-based minions (Holy Relic, etc.)",
+          },
+          {
+            gem: "Added Lightning Damage Support",
+            priority: 7,
+            reasoning: "Added lightning for elemental minions",
+          },
+          {
+            gem: "Awakened Minion Damage Support",
+            priority: 8,
+            reasoning: "Upgraded minion damage for endgame",
+          },
+        ],
+        avoid_supports: [
+          "Spell Echo Support",
+          "Controlled Destruction Support",
+          "Brutality Support",
+        ],
       },
       {
         name: "Generic",

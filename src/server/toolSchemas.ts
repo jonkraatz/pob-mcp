@@ -134,13 +134,13 @@ export function getToolSchemas(): any[] {
     },
     {
       name: "get_nearby_nodes",
-      description: "Find notable and keystone passives near your current tree allocation",
+      description: "Find notable and keystone passives near your current tree allocation. Uses loaded Lua bridge build when no build_name is provided.",
       inputSchema: {
         type: "object",
         properties: {
           build_name: {
             type: "string",
-            description: "Build to analyze",
+            description: "Build file to analyze (optional if a build is loaded via lua_load_build)",
           },
           max_distance: {
             type: "number",
