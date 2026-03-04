@@ -31,14 +31,30 @@ export async function handleValidateBuild(
     const luaClient = getLuaClient();
     if (luaClient) {
       try {
-        // If a build name is provided and file exists, load it first
+        // If a build name is provided and file exists, load it only if:
+        // - no build is currently loaded, OR
+        // - the same build is already loaded (safe reload)
+        // Never replace a *different* in-memory build to avoid data loss.
         if (buildName && context.pobDirectory) {
+          let shouldLoad = true;
           try {
-            const buildPath = path.join(context.pobDirectory, buildName);
-            const buildXml = await fs.readFile(buildPath, 'utf-8');
-            await luaClient.loadBuildXml(buildXml, buildName);
-          } catch {
-            // File doesn't exist — use already-loaded in-memory build
+            const info = await luaClient.getBuildInfo();
+            const loadedName: string = info?.name ?? '';
+            const requested = buildName.replace(/\.xml$/i, '');
+            const loaded    = loadedName.replace(/\.xml$/i, '');
+            if (loaded && loaded !== requested) {
+              shouldLoad = false; // different build in memory — skip
+            }
+          } catch { /* no build loaded — safe to load */ }
+
+          if (shouldLoad) {
+            try {
+              const buildPath = path.join(context.pobDirectory, buildName);
+              const buildXml = await fs.readFile(buildPath, 'utf-8');
+              await luaClient.loadBuildXml(buildXml, buildName);
+            } catch {
+              // File doesn't exist — use already-loaded in-memory build
+            }
           }
         }
         luaStats = await luaClient.getStats();

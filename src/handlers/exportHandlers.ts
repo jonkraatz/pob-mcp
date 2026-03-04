@@ -184,23 +184,24 @@ export async function handleExportBuildSummary(context: ExportContext) {
   const luaClient = context.luaClient;
   if (!luaClient) throw new Error('Lua bridge not active. Use lua_load_build first.');
 
-  const [infoResult, statsResult, skillsResult, treeResult] = await Promise.allSettled([
-    luaClient.getBuildInfo(),
-    luaClient.getStats([
+  // Lua bridge only supports one request at a time — must be sequential
+  let info: any = null;
+  let stats: Record<string, any> = {};
+  let skills: any = null;
+  let tree: any = null;
+
+  try { info = await luaClient.getBuildInfo(); } catch { /* best effort */ }
+  try {
+    stats = await luaClient.getStats([
       'Life', 'EnergyShield', 'Mana', 'ManaUnreserved',
       'TotalDPS', 'CombinedDPS', 'MinionTotalDPS',
       'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist',
       'Armour', 'Evasion', 'PhysicalDamageReduction', 'TotalEHP',
       'LifeRegen', 'SpellSuppressionChance', 'BlockChance',
-    ]),
-    luaClient.getSkills(),
-    luaClient.getTree(),
-  ]);
-
-  const info = infoResult.status === 'fulfilled' ? infoResult.value : null;
-  const stats = statsResult.status === 'fulfilled' ? statsResult.value : {};
-  const skills = skillsResult.status === 'fulfilled' ? skillsResult.value : null;
-  const tree = treeResult.status === 'fulfilled' ? treeResult.value : null;
+    ]) ?? {};
+  } catch { /* best effort */ }
+  try { skills = await luaClient.getSkills(); } catch { /* best effort */ }
+  try { tree = await luaClient.getTree(); } catch { /* best effort */ }
 
   const classNames = ['Scion', 'Marauder', 'Ranger', 'Witch', 'Duelist', 'Templar', 'Shadow'];
   const className = (tree?.classId != null ? classNames[tree.classId] : null) || info?.class || 'Unknown';

@@ -138,130 +138,139 @@ export class PoeNinjaClient {
    * Build a currency exchange rate map (all rates in chaos equivalent)
    */
   async getCurrencyExchangeMap(league: string): Promise<Map<string, number>> {
-    const cacheKey = `currency:${league}`;
-    const cached = this.getFromCache(cacheKey);
-
-    const url = `${this.baseUrl}/overview?league=${encodeURIComponent(league)}&type=Currency`;
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'pob-mcp-server/1.0',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`poe.ninja API request failed (${response.status}): ${await response.text()}`);
-    }
-
-    const data: NewCurrencyOverview = await response.json();
-    this.putInCache(cacheKey, data);
-
+    const data = await this.getCurrencyRates(league);
     const rateMap = new Map<string, number>();
-
-    // Chaos is the base currency
     rateMap.set('Chaos Orb', 1.0);
-
-    // Build id->name mapping
-    const idToName = new Map<string, string>();
-    for (const item of data.items) {
-      idToName.set(item.id, item.name);
-    }
-
-    // Parse currency rates from new format
     for (const line of data.lines) {
-      const name = idToName.get(line.id);
-      if (name && line.primaryValue > 0) {
-        rateMap.set(name, line.primaryValue);
+      if (line.currencyTypeName && line.chaosEquivalent > 0) {
+        rateMap.set(line.currencyTypeName, line.chaosEquivalent);
       }
     }
-
     return rateMap;
   }
 
   /**
-   * Find arbitrage opportunities using currency exchange rates
+   * Find arbitrage opportunities using bid/ask spread from currency exchange rates.
+   *
+   * Real arbitrage requires separate buy and sell rates. poe.ninja provides:
+   *   receive.value = chaos received per unit sold (sell/ask rate)
+   *   pay.value     = chaos paid per unit bought (buy/bid rate)
+   *
+   * For a round-trip A→chaos→B→chaos→A to be profitable:
+   *   (sellRate[A] / buyRate[B]) * (sellRate[B] / buyRate[A]) > 1
+   *
+   * When buy==sell (no spread data), round-trips always return exactly 1 (0% profit).
    */
   async findArbitrageOpportunities(league: string, minProfitPercent: number = 1.0): Promise<ArbitrageOpportunity[]> {
-    const rateMap = await this.getCurrencyExchangeMap(league);
+    const overview = await this.getCurrencyRates(league);
     const opportunities: ArbitrageOpportunity[] = [];
 
-    // Convert to array for easier iteration
-    const currencies = Array.from(rateMap.keys());
+    // Build separate buy-rate and sell-rate maps (all in chaos per unit).
+    // sell = chaos you receive per unit when selling
+    // buy  = chaos you pay per unit when buying
+    // Fall back to chaosEquivalent for both when pay/receive unavailable.
+    const sellRate = new Map<string, number>(); // chaos received when selling 1 unit
+    const buyRate  = new Map<string, number>(); // chaos spent when buying  1 unit
 
-    // Check 2-step arbitrage (A -> B -> A)
+    sellRate.set('Chaos Orb', 1.0);
+    buyRate.set('Chaos Orb', 1.0);
+
+    for (const line of overview.lines) {
+      const name = line.currencyTypeName;
+      if (!name || line.chaosEquivalent <= 0) continue;
+
+      // receive.value: chaos per unit of this currency (sell side)
+      const sell = line.receive?.value ?? line.chaosEquivalent;
+      // pay.value: chaos per unit of this currency when buying (buy side)
+      // poe.ninja pay.value is expressed as [units-of-currency per chaos], so invert it.
+      const buy = line.pay?.value
+        ? 1 / line.pay.value          // convert [currency/chaos] → [chaos/currency]
+        : line.chaosEquivalent;       // fallback: assume no spread
+
+      if (sell > 0 && buy > 0) {
+        sellRate.set(name, sell);
+        buyRate.set(name, buy);
+      }
+    }
+
+    const currencies = Array.from(sellRate.keys());
+
+    // 2-step: A → chaos → B → chaos → A
     for (let i = 0; i < currencies.length; i++) {
-      const currencyA = currencies[i];
-      const rateA = rateMap.get(currencyA)!;
+      const A = currencies[i];
+      const sA = sellRate.get(A)!;
+      const bA = buyRate.get(A)!;
 
       for (let j = 0; j < currencies.length; j++) {
         if (i === j) continue;
+        const B = currencies[j];
+        const sB = sellRate.get(B)!;
+        const bB = buyRate.get(B)!;
 
-        const currencyB = currencies[j];
-        const rateB = rateMap.get(currencyB)!;
+        // Sell A → chaos, buy B, sell B → chaos, buy A back
+        const chaosAfterSellA = sA;               // sell 1 A
+        const unitsB         = chaosAfterSellA / bB; // buy B
+        const chaosAfterSellB = unitsB * sB;      // sell B
+        const finalA         = chaosAfterSellB / bA; // buy A back
 
-        // Calculate round-trip: A -> Chaos -> B -> Chaos -> A
-        // Starting with 1 unit of A
-        const chaosFromA = rateA;
-        const unitsOfB = chaosFromA / rateB;
-        const chaosFromB = unitsOfB * rateB;
-        const finalA = chaosFromB / rateA;
-
-        const profitPercent = ((finalA - 1) * 100);
-
+        const profitPercent = (finalA - 1) * 100;
         if (profitPercent >= minProfitPercent) {
           opportunities.push({
-            chain: [currencyA, currencyB, currencyA],
+            chain: [A, B, A],
             profitPercent,
             startAmount: 1,
             endAmount: finalA,
             steps: [
-              { from: currencyA, to: 'Chaos Orb', rate: rateA, amount: rateA },
-              { from: 'Chaos Orb', to: currencyB, rate: 1 / rateB, amount: unitsOfB },
-              { from: currencyB, to: 'Chaos Orb', rate: rateB, amount: chaosFromB },
-              { from: 'Chaos Orb', to: currencyA, rate: 1 / rateA, amount: finalA },
+              { from: A,           to: 'Chaos Orb', rate: sA,       amount: chaosAfterSellA },
+              { from: 'Chaos Orb', to: B,           rate: 1 / bB,   amount: unitsB },
+              { from: B,           to: 'Chaos Orb', rate: sB,       amount: chaosAfterSellB },
+              { from: 'Chaos Orb', to: A,           rate: 1 / bA,   amount: finalA },
             ],
           });
         }
       }
     }
 
-    // Check 3-step arbitrage (A -> B -> C -> A)
-    for (let i = 0; i < currencies.length && i < 20; i++) { // Limit for performance
-      const currencyA = currencies[i];
-      const rateA = rateMap.get(currencyA)!;
+    // 3-step: A → chaos → B → chaos → C → chaos → A (limit iterations for performance)
+    const limit = Math.min(currencies.length, 20);
+    for (let i = 0; i < limit; i++) {
+      const A = currencies[i];
+      const sA = sellRate.get(A)!;
+      const bA = buyRate.get(A)!;
 
-      for (let j = 0; j < currencies.length && j < 20; j++) {
-        if (i === j) continue;
-        const currencyB = currencies[j];
-        const rateB = rateMap.get(currencyB)!;
+      for (let j = 0; j < limit; j++) {
+        if (j === i) continue;
+        const B = currencies[j];
+        const sB = sellRate.get(B)!;
+        const bB = buyRate.get(B)!;
 
-        for (let k = 0; k < currencies.length && k < 20; k++) {
+        for (let k = 0; k < limit; k++) {
           if (k === i || k === j) continue;
-          const currencyC = currencies[k];
-          const rateC = rateMap.get(currencyC)!;
+          const C = currencies[k];
+          const sC = sellRate.get(C)!;
+          const bC = buyRate.get(C)!;
 
-          // A -> B -> C -> A
-          const chaosFromA = rateA;
-          const unitsOfB = chaosFromA / rateB;
-          const chaosFromB = unitsOfB * rateB;
-          const unitsOfC = chaosFromB / rateC;
-          const chaosFromC = unitsOfC * rateC;
-          const finalA = chaosFromC / rateA;
+          const chaosA  = sA;
+          const unitsB  = chaosA  / bB;
+          const chaosB  = unitsB  * sB;
+          const unitsC  = chaosB  / bC;
+          const chaosC  = unitsC  * sC;
+          const finalA  = chaosC  / bA;
 
-          const profitPercent = ((finalA - 1) * 100);
-
+          const profitPercent = (finalA - 1) * 100;
           if (profitPercent >= minProfitPercent) {
             opportunities.push({
-              chain: [currencyA, currencyB, currencyC, currencyA],
+              chain: [A, B, C, A],
               profitPercent,
               startAmount: 1,
               endAmount: finalA,
               steps: [
-                { from: currencyA, to: 'Chaos Orb', rate: rateA, amount: rateA },
-                { from: 'Chaos Orb', to: currencyB, rate: 1 / rateB, amount: unitsOfB },
-                { from: currencyB, to: 'Chaos Orb', rate: rateB, amount: chaosFromB },
-                { from: 'Chaos Orb', to: currencyC, rate: 1 / rateC, amount: unitsOfC },
-                { from: currencyC, to: 'Chaos Orb', rate: rateC, amount: chaosFromC },
-                { from: 'Chaos Orb', to: currencyA, rate: 1 / rateA, amount: finalA },
+                { from: A,           to: 'Chaos Orb', rate: sA,     amount: chaosA },
+                { from: 'Chaos Orb', to: B,           rate: 1 / bB, amount: unitsB },
+                { from: B,           to: 'Chaos Orb', rate: sB,     amount: chaosB },
+                { from: 'Chaos Orb', to: C,           rate: 1 / bC, amount: unitsC },
+                { from: C,           to: 'Chaos Orb', rate: sC,     amount: chaosC },
+                { from: 'Chaos Orb', to: A,           rate: 1 / bA, amount: finalA },
               ],
             });
           }
@@ -269,10 +278,9 @@ export class PoeNinjaClient {
       }
     }
 
-    // Sort by profit percentage descending
     opportunities.sort((a, b) => b.profitPercent - a.profitPercent);
 
-    // Remove duplicates (same currencies, different order)
+    // De-duplicate chains with the same set of currencies
     const seen = new Set<string>();
     const unique = opportunities.filter(opp => {
       const key = [...opp.chain].sort().join('|');
@@ -281,7 +289,7 @@ export class PoeNinjaClient {
       return true;
     });
 
-    return unique.slice(0, 20); // Return top 20
+    return unique.slice(0, 20);
   }
 
   /**

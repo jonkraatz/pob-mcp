@@ -32,31 +32,49 @@ export async function handleListBuilds(context: HandlerContext) {
 export async function handleAnalyzeBuild(context: HandlerContext, buildName: string) {
   const build = await context.buildService.readBuild(buildName);
 
-  // Try to load build into Lua for live calculations
+  // Try to get live Lua stats — only load from file if the same build is already loaded
+  // or if no build is loaded. Never replace a *different* in-memory build (data-loss risk).
   let luaStats: any = null;
+  let luaSkipped = false;
   try {
     await context.ensureLuaClient();
     const luaClient = context.getLuaClient();
 
     if (luaClient) {
-      // Read the build XML file
-      const buildPath = path.join(context.pobDirectory, buildName);
-      const buildXml = await fs.readFile(buildPath, 'utf-8');
+      let shouldLoad = true;
+      try {
+        const info = await luaClient.getBuildInfo();
+        const loadedName: string = info?.name ?? '';
+        // Strip .xml suffix for comparison since PoB may omit it
+        const requested = buildName.replace(/\.xml$/i, '');
+        const loaded    = loadedName.replace(/\.xml$/i, '');
+        if (loaded && loaded !== requested) {
+          // A different build is in memory — skip loading to avoid destroying unsaved work
+          shouldLoad = false;
+          luaSkipped = true;
+        }
+      } catch { /* no build loaded yet — safe to load */ }
 
-      // Load into Lua
-      await luaClient.loadBuildXml(buildXml);
-      console.error('[handleAnalyzeBuild] Build loaded into Lua successfully');
-
-      // Get live stats
-      luaStats = await luaClient.getStats();
-      console.error('[handleAnalyzeBuild] Retrieved live stats from Lua');
+      if (shouldLoad) {
+        const buildPath = path.join(context.pobDirectory, buildName);
+        const buildXml = await fs.readFile(buildPath, 'utf-8');
+        await luaClient.loadBuildXml(buildXml);
+        luaStats = await luaClient.getStats();
+      } else {
+        // Still try to get stats from the currently-loaded build for reference
+        try { luaStats = await luaClient.getStats(); } catch { /* best effort */ }
+      }
     }
   } catch (error) {
-    console.error('[handleAnalyzeBuild] Failed to load build into Lua:', error);
     // Continue with XML-only analysis
   }
 
   let summary = context.buildService.generateBuildSummary(build);
+
+  if (luaSkipped) {
+    summary += "\n⚠️  Note: A different build is loaded in the Lua bridge. Stats shown are from that build.\n" +
+               "    Use lua_load_build to load this build for accurate live stats.\n";
+  }
 
   // If we have Lua stats, add them
   if (luaStats) {

@@ -3,6 +3,9 @@ import fs from "fs/promises";
 import path from "path";
 import type { PoBBuild, CachedBuild, ParsedConfiguration, ConfigInput, ConfigSet, Flask, FlaskAnalysis, Jewel, JewelAnalysis } from "../types.js";
 
+const CACHE_TTL_MS = 60_000;  // 60 seconds
+const CACHE_MAX_SIZE = 20;
+
 export class BuildService {
   private parser: XMLParser;
   private pobDirectory: string;
@@ -51,26 +54,26 @@ export class BuildService {
   }
 
   async readBuild(buildName: string): Promise<PoBBuild> {
-    // Check cache first
+    // Check cache — evict if stale
     const cached = this.buildCache.get(buildName);
-    if (cached) {
-      console.error(`[Cache] Hit for ${buildName}`);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
       return cached.data;
     }
 
-    // Cache miss - read from file
-    console.error(`[Cache] Miss for ${buildName}`);
+    // Cache miss or expired — read from file
     const buildPath = path.join(this.pobDirectory, buildName);
     const content = await fs.readFile(buildPath, "utf-8");
     const parsed = this.parser.parse(content);
     const buildData = parsed.PathOfBuilding;
 
-    // Store in cache
-    this.buildCache.set(buildName, {
-      data: buildData,
-      timestamp: Date.now()
-    });
+    // Evict oldest entry if at capacity
+    if (this.buildCache.size >= CACHE_MAX_SIZE) {
+      const oldest = Array.from(this.buildCache.entries())
+        .sort((a, b) => a[1].timestamp - b[1].timestamp)[0];
+      if (oldest) this.buildCache.delete(oldest[0]);
+    }
 
+    this.buildCache.set(buildName, { data: buildData, timestamp: Date.now() });
     return buildData;
   }
 
