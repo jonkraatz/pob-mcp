@@ -508,6 +508,7 @@ export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes
     const result = await luaClient.updateTreeDelta(params);
     const tree = result?.tree;
     const autoPathedNodes = result?.autoPathedNodes;
+    const skippedAsc = result?.skippedAscendancyNodes;
 
     const actualCount = Array.isArray(tree?.nodes) ? tree.nodes.length : '?';
     const addedCount  = addNodes?.length ?? 0;
@@ -522,7 +523,11 @@ export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes
       text += `\n🔗 Auto-pathed ${autoPathedNodes.length} intermediate node(s) to maintain connectivity.`;
     }
 
-    if (addedCount > 0 && !autoPathedNodes?.length) {
+    if (skippedAsc && skippedAsc.length > 0) {
+      text += `\n🔴 BLOCKED: ${skippedAsc.length} ascendancy node(s) skipped — would exceed 8-point ascendancy cap (IDs: ${skippedAsc.join(', ')}).`;
+    }
+
+    if (addedCount > 0 && !autoPathedNodes?.length && !skippedAsc?.length) {
       text += `\n⚠️  If total count is lower than expected, some nodes may have been dropped (not connected or invalid IDs).`;
     }
 
