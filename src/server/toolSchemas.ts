@@ -234,7 +234,7 @@ export function getLuaToolSchemas(): any[] {
     },
     {
       name: "lua_new_build",
-      description: "Create a new blank build with specified class and ascendancy",
+      description: "Create a new blank build with specified class and ascendancy. Auto-starts the Lua bridge if needed (no need to call lua_start first). Classes and ascendancies (PoE1): Scion: Ascendant | Marauder: Juggernaut, Berserker, Chieftain | Ranger: Raider, Deadeye, Pathfinder | Witch: Occultist, Elementalist, Necromancer | Duelist: Slayer, Gladiator, Champion | Templar: Inquisitor, Hierophant, Guardian | Shadow: Assassin, Trickster, Saboteur",
       inputSchema: {
         type: "object",
         properties: {
@@ -286,6 +286,41 @@ export function getLuaToolSchemas(): any[] {
           index: { type: "number", description: "Spec index (1-based, use list_specs to see available specs)" },
         },
         required: ["index"],
+      },
+    },
+    {
+      name: "create_spec",
+      description: "Create a new passive tree spec in the current build. Use for leveling guides: create specs titled 'Level 10', 'Level 20', etc. with different tree allocations. Use copyFrom to start from an existing spec and modify.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Title for the new spec (e.g. 'Level 40 Tree')" },
+          copyFrom: { type: "number", description: "Spec index (1-based) to copy class/ascendancy/nodes from" },
+          activate: { type: "boolean", description: "Whether to switch to the new spec (default: true)" },
+        },
+      },
+    },
+    {
+      name: "delete_spec",
+      description: "Delete a passive tree spec from the current build. Cannot delete the last remaining spec or the currently active spec (switch first with select_spec).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          index: { type: "number", description: "Spec index to delete (1-based, use list_specs to see available specs)" },
+        },
+        required: ["index"],
+      },
+    },
+    {
+      name: "rename_spec",
+      description: "Rename a passive tree spec in the current build.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          index: { type: "number", description: "Spec index to rename (1-based)" },
+          title: { type: "string", description: "New title for the spec" },
+        },
+        required: ["index", "title"],
       },
     },
     {
@@ -361,7 +396,7 @@ export function getLuaToolSchemas(): any[] {
           },
           ascendClassId: {
             type: "number",
-            description: "Ascendancy class ID (1-3, class-specific). For Witch: 1=Occultist, 2=Elementalist, 3=Necromancer. If omitted, preserves current ascendancy.",
+            description: "Ascendancy class ID (0=None, 1-3 class-specific). Scion: 1=Ascendant | Marauder: 1=Juggernaut, 2=Berserker, 3=Chieftain | Ranger: 1=Raider, 2=Deadeye, 3=Pathfinder | Witch: 1=Occultist, 2=Elementalist, 3=Necromancer | Duelist: 1=Slayer, 2=Gladiator, 3=Champion | Templar: 1=Inquisitor, 2=Hierophant, 3=Guardian | Shadow: 1=Assassin, 2=Trickster, 3=Saboteur",
           },
         },
         required: ["nodes"],
@@ -388,7 +423,7 @@ export function getLuaToolSchemas(): any[] {
     },
     {
       name: "lua_get_build_info",
-      description: "Get metadata about the currently loaded build: name, character level, class, ascendancy, and tree version. Useful to confirm which build is active after lua_load_build or lua_new_build.",
+      description: "Get metadata about the currently loaded build: name, character level, class, ascendancy, and tree version. Useful to confirm which build is active after lua_load_build or lua_new_build. Classes and ascendancies (PoE1): Scion: Ascendant | Marauder: Juggernaut, Berserker, Chieftain | Ranger: Raider, Deadeye, Pathfinder | Witch: Occultist, Elementalist, Necromancer | Duelist: Slayer, Gladiator, Champion | Templar: Inquisitor, Hierophant, Guardian | Shadow: Assassin, Trickster, Saboteur",
       inputSchema: {
         type: "object",
         properties: {},
@@ -442,6 +477,7 @@ export function getLuaToolSchemas(): any[] {
           slot_name: {
             type: "string",
             description: "Slot to equip in: Weapon 1, Weapon 2, Helmet, Body Armour, Gloves, Boots, Amulet, Ring 1, Ring 2, Belt, Flask 1-5",
+            enum: ["Weapon 1", "Weapon 2", "Helmet", "Body Armour", "Gloves", "Boots", "Amulet", "Ring 1", "Ring 2", "Belt", "Flask 1", "Flask 2", "Flask 3", "Flask 4", "Flask 5"],
           },
         },
         required: ["item_text", "slot_name"],
@@ -496,9 +532,9 @@ export function getLuaToolSchemas(): any[] {
             type: "number",
             description: "Socket group index (1-based)",
           },
-          gem_index: {
+          active_skill_index: {
             type: "number",
-            description: "Gem index within group (1-based, optional)",
+            description: "Active skill index within group (1-based, optional). Selects which active skill in the group to use for DPS calculation — relevant when a group has multiple active skills.",
           },
         },
         required: ["group_index"],
@@ -517,6 +553,7 @@ export function getLuaToolSchemas(): any[] {
           slot: {
             type: "string",
             description: "Item slot for sockets (e.g., 'Weapon 1', 'Body Armour')",
+            enum: ["Weapon 1", "Weapon 2", "Helmet", "Body Armour", "Gloves", "Boots", "Amulet", "Ring 1", "Ring 2", "Belt", "Flask 1", "Flask 2", "Flask 3", "Flask 4", "Flask 5"],
           },
           enabled: {
             type: "boolean",
@@ -638,7 +675,7 @@ export function getLuaToolSchemas(): any[] {
     },
     {
       name: "setup_skill_with_gems",
-      description: "Setup a complete skill with multiple support gems in one operation",
+      description: "Setup a complete skill with multiple support gems in one operation. Does NOT auto-set as main skill for DPS. Call set_main_skill with the returned group_index afterward if this should be the primary DPS skill.",
       inputSchema: {
         type: "object",
         properties: {
@@ -658,6 +695,7 @@ export function getLuaToolSchemas(): any[] {
           slot: {
             type: "string",
             description: "Item slot (optional)",
+            enum: ["Weapon 1", "Weapon 2", "Helmet", "Body Armour", "Gloves", "Boots", "Amulet", "Ring 1", "Ring 2", "Belt", "Flask 1", "Flask 2", "Flask 3", "Flask 4", "Flask 5"],
           },
         },
         required: ["label", "active_gem", "support_gems"],
@@ -840,7 +878,7 @@ export function getConfigToolSchemas(): any[] {
     },
     {
       name: "set_config",
-      description: "Modify configuration inputs to test different scenarios. Common configs: usePowerCharges, useFrenzyCharges, enemyIsBoss, conditionFortify, conditionLeeching, buffOnslaught. Requires Lua bridge.",
+      description: "Modify configuration inputs. Common keys — Charges: usePowerCharges, useFrenzyCharges, useEnduranceCharges | Conditions: conditionFortify, conditionLeeching, conditionOnFullLife, conditionOnFullEnergyShield | Buffs: buffOnslaught | Enemy: enemyIsBoss ('Shaper'/'Pinnacle'/false), enemyLevel | Build: bandit ('None'/'Oak'/'Alira'/'Kraityn'), pantheonMajorGod, pantheonMinorGod. Call get_config to see all current values.",
       inputSchema: {
         type: "object",
         properties: {

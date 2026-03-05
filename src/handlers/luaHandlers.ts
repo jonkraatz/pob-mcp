@@ -320,6 +320,17 @@ export async function handleLuaGetStats(context: LuaHandlerContext, category?: s
   });
 }
 
+const CLASS_NAMES: Record<number, string> = { 0:'Scion', 1:'Marauder', 2:'Ranger', 3:'Witch', 4:'Duelist', 5:'Templar', 6:'Shadow' };
+const ASCENDANCY_NAMES: Record<number, Record<number, string>> = {
+  0: {1:'Ascendant'},
+  1: {1:'Juggernaut', 2:'Berserker', 3:'Chieftain'},
+  2: {1:'Raider', 2:'Deadeye', 3:'Pathfinder'},
+  3: {1:'Occultist', 2:'Elementalist', 3:'Necromancer'},
+  4: {1:'Slayer', 2:'Gladiator', 3:'Champion'},
+  5: {1:'Inquisitor', 2:'Hierophant', 3:'Guardian'},
+  6: {1:'Assassin', 2:'Trickster', 3:'Saboteur'},
+};
+
 export async function handleLuaGetTree(context: LuaHandlerContext, includeNodeIds?: boolean) {
   return wrapHandler('get passive tree', async () => {
     await context.ensureLuaClient();
@@ -335,8 +346,12 @@ export async function handleLuaGetTree(context: LuaHandlerContext, includeNodeId
 
     if (tree && typeof tree === 'object') {
       textLines.push(`Tree Version: ${tree.treeVersion ?? 'Unknown'}`);
-      textLines.push(`Class ID: ${tree.classId != null ? tree.classId : 'Unknown'}`);
-      textLines.push(`Ascendancy ID: ${tree.ascendClassId != null ? tree.ascendClassId : 'Unknown'}`);
+      const classId = tree.classId != null ? tree.classId : undefined;
+      const className = classId != null ? CLASS_NAMES[classId] : undefined;
+      textLines.push(`Class: ${className ?? 'Unknown'} (ID: ${classId ?? 'Unknown'})`);
+      const ascId = tree.ascendClassId != null ? tree.ascendClassId : undefined;
+      const ascName = classId != null && ascId != null && ascId > 0 ? ASCENDANCY_NAMES[classId]?.[ascId] : (ascId === 0 ? 'None' : undefined);
+      textLines.push(`Ascendancy: ${ascName ?? 'Unknown'} (ID: ${ascId ?? 'Unknown'})`);
 
       if (tree.secondaryAscendClassId) {
         textLines.push(`Secondary Ascendancy ID: ${tree.secondaryAscendClassId}`);
@@ -631,6 +646,27 @@ export async function handleSearchTreeNodes(
   });
 }
 
+export async function handleCreateSpec(context: LuaHandlerContext, title?: string, copyFrom?: number, activate?: boolean) {
+  return wrapHandler('create spec', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    const params: { title?: string; copyFrom?: number; activate?: boolean } = {};
+    if (title != null) params.title = title;
+    if (copyFrom != null) params.copyFrom = copyFrom;
+    if (activate != null) params.activate = activate;
+    const result = await luaClient.createSpec(params);
+    if (!result?.specs?.length) {
+      return { content: [{ type: "text" as const, text: "Failed to create spec." }] };
+    }
+    const newSpec = result.specs[result.specs.length - 1];
+    let text = `✅ Created new spec [${newSpec.index}] "${newSpec.title}" (${newSpec.className}/${newSpec.ascendClassName}, ${newSpec.nodeCount} nodes).`;
+    if (newSpec.active) text += '\nThis spec is now active.';
+    text += `\n\nTotal specs: ${result.specs.length}. Use list_specs to see all, select_spec to switch.`;
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
 export async function handleListSpecs(context: LuaHandlerContext) {
   return wrapHandler('list specs', async () => {
   await context.ensureLuaClient();
@@ -663,6 +699,36 @@ export async function handleSelectSpec(context: LuaHandlerContext, index: number
   if (active) text += ` — ${active.title} (${active.className}/${active.ascendClassName}, ${active.nodeCount} nodes)`;
   text += `.\n\nStats have been recalculated for this spec.`;
   return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleDeleteSpec(context: LuaHandlerContext, index: number) {
+  return wrapHandler('delete spec', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    const result = await luaClient.deleteSpec(index);
+    if (!result?.specs?.length) {
+      return { content: [{ type: "text" as const, text: "Failed to delete spec." }] };
+    }
+    let text = `✅ Deleted spec ${index}. ${result.specs.length} spec(s) remaining.`;
+    text += `\n\nActive: Spec ${result.activeSpec}. Use list_specs to see all.`;
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleRenameSpec(context: LuaHandlerContext, index: number, title: string) {
+  return wrapHandler('rename spec', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    const result = await luaClient.renameSpec(index, title);
+    if (!result?.specs?.length) {
+      return { content: [{ type: "text" as const, text: "Failed to rename spec." }] };
+    }
+    const renamed = result.specs.find((s: any) => s.index === index);
+    let text = `✅ Spec ${index} renamed to "${renamed?.title ?? title}".`;
+    return { content: [{ type: "text" as const, text }] };
   });
 }
 

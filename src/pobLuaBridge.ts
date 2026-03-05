@@ -424,6 +424,12 @@ async setTree(params: {
     return res.result;
   }
 
+  async createSpec(params?: { title?: string; copyFrom?: number; activate?: boolean }): Promise<any> {
+    const res = await this.send({ action: "create_spec", params: params || {} });
+    if (!res.ok) throw new Error(res.error || "create_spec failed");
+    return res.result;
+  }
+
   async listSpecs(): Promise<any> {
     const res = await this.send({ action: "list_specs" });
     if (!res.ok) throw new Error(res.error || "list_specs failed");
@@ -433,6 +439,18 @@ async setTree(params: {
   async selectSpec(index: number): Promise<any> {
     const res = await this.send({ action: "select_spec", params: { index } });
     if (!res.ok) throw new Error(res.error || "select_spec failed");
+    return res.result;
+  }
+
+  async deleteSpec(index: number): Promise<any> {
+    const res = await this.send({ action: "delete_spec", params: { index } });
+    if (!res.ok) throw new Error(res.error || "delete_spec failed");
+    return res.result;
+  }
+
+  async renameSpec(index: number, title: string): Promise<any> {
+    const res = await this.send({ action: "rename_spec", params: { index, title } });
+    if (!res.ok) throw new Error(res.error || "rename_spec failed");
     return res.result;
   }
 

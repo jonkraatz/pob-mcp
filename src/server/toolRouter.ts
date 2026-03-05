@@ -17,7 +17,7 @@ import { handleListBuilds, handleAnalyzeBuild, handleCompareBuilds, handleGetBui
 import { handleStartWatching, handleStopWatching, handleGetRecentChanges, handleWatchStatus, handleRefreshTreeData } from "../handlers/watchHandlers.js";
 import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handleGetPassiveUpgrades, handleSuggestMasteries } from "../handlers/treeHandlers.js";
 import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
-import { handleLuaStart, handleLuaStop, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleListSpecs, handleSelectSpec, handleListItemSets, handleSelectItemSet } from "../handlers/luaHandlers.js";
+import { handleLuaStart, handleLuaStop, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet } from "../handlers/luaHandlers.js";
 import { handleAddItem, handleGetEquippedItems, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
@@ -193,12 +193,28 @@ export async function routeToolCall(
         args.remove_nodes as string[] | undefined
       );
 
+    case "create_spec":
+      return await handleCreateSpec(
+        luaContext,
+        args?.title as string | undefined,
+        args?.copyFrom as number | undefined,
+        args?.activate as boolean | undefined
+      );
+
     case "list_specs":
       return await handleListSpecs(luaContext);
 
     case "select_spec":
       if (args?.index == null) throw new Error("Missing index");
       return await handleSelectSpec(luaContext, args.index as number);
+
+    case "delete_spec":
+      if (args?.index == null) throw new Error("Missing index");
+      return await handleDeleteSpec(luaContext, args.index as number);
+
+    case "rename_spec":
+      if (!args?.index || !args?.title) throw new Error("Missing index or title");
+      return await handleRenameSpec(luaContext, args.index as number, args.title as string);
 
     case "list_item_sets":
       return await handleListItemSets(luaContext);
@@ -289,7 +305,7 @@ export async function routeToolCall(
 
     case "set_main_skill":
       if (!args) throw new Error("Missing arguments");
-      return await handleSetMainSkill(itemSkillContext, args.group_index as number, args.gem_index as number | undefined, args.skill_part as number | undefined);
+      return await handleSetMainSkill(itemSkillContext, args.group_index as number, (args.active_skill_index ?? args.gem_index) as number | undefined, args.skill_part as number | undefined);
 
     case "create_socket_group":
       return await handleCreateSocketGroup(itemSkillContext, args?.label as string | undefined, args?.slot as string | undefined, args?.enabled as boolean | undefined, args?.include_in_full_dps as boolean | undefined);
