@@ -416,6 +416,11 @@ export async function handleLuaSetTree(context: LuaHandlerContext, args: any) {
       text += `\nTip: Ensure the class is set correctly and nodes form a valid connected path from the starting node.`;
     }
 
+    const ascUsed = tree?.ascendancyPointsUsed ?? 0;
+    if (ascUsed > 8) {
+      text += `\n🔴 ERROR: ${ascUsed} ascendancy points used (max 8). Remove ${ascUsed - 8} ascendancy node(s).`;
+    }
+
     return {
       content: [
         {
@@ -519,6 +524,11 @@ export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes
 
     if (addedCount > 0 && !autoPathedNodes?.length) {
       text += `\n⚠️  If total count is lower than expected, some nodes may have been dropped (not connected or invalid IDs).`;
+    }
+
+    const ascUsed = tree?.ascendancyPointsUsed ?? 0;
+    if (ascUsed > 8) {
+      text += `\n🔴 ERROR: ${ascUsed} ascendancy points used (max 8). Remove ${ascUsed - 8} ascendancy node(s).`;
     }
 
     return {
