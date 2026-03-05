@@ -528,7 +528,7 @@ export function getLuaToolSchemas(): any[] {
     },
     {
       name: "add_gem",
-      description: "Add a gem to a socket group",
+      description: "Add a gem to a socket group. IMPORTANT: Use the gem's base name WITHOUT 'Support' suffix — e.g. 'Brutality' not 'Brutality Support', 'Concentrated Effect' not 'Concentrated Effect Support', 'Melee Physical Damage' not 'Melee Physical Damage Support'. The server will auto-resolve names but correct names ensure proper matching.",
       inputSchema: {
         type: "object",
         properties: {
@@ -538,7 +538,7 @@ export function getLuaToolSchemas(): any[] {
           },
           gem_name: {
             type: "string",
-            description: "Name of the gem",
+            description: "Gem name WITHOUT 'Support' suffix (e.g. 'Brutality', 'Concentrated Effect', 'Multistrike')",
           },
           level: {
             type: "number",
