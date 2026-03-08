@@ -1,0 +1,4 @@
+[submodule "external/PathOfBuilding"]
+	path = external/PathOfBuilding
+	url = https://github.com/jonkraatz/PathOfBuilding.git
+	branch = api-stdio
