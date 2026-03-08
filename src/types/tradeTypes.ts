@@ -9,6 +9,7 @@ export interface StatFilter {
   value?: {
     min?: number;
     max?: number;
+    weight?: number;
   };
   disabled?: boolean;
 }
@@ -172,6 +173,7 @@ export interface TradeQuery {
   };
   sort?: {
     price?: 'asc' | 'desc';
+    'statgroup.0'?: 'asc' | 'desc';
   };
 }
 

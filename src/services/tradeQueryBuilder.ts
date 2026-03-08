@@ -373,6 +373,28 @@ export class TradeQueryBuilder {
   }
 
   /**
+   * Add a weighted-sum stat group for PoE Trade API.
+   * Items are sorted by Σ(stat_value × weight) descending (statgroup.0: desc).
+   * Use weights from analyze_slot_weights / get_slot_weights to rank items
+   * by their actual impact on the loaded build.
+   */
+  withWeightedStats(
+    weights: Array<{ id: string; weight: number }>,
+    minScore: number = 0,
+  ): this {
+    if (!this.query.query.stats) {
+      this.query.query.stats = [];
+    }
+    this.query.query.stats.push({
+      type: 'weight',
+      value: { min: minScore },
+      filters: weights.map(w => ({ id: w.id, value: { weight: w.weight } })),
+    });
+    this.query.sort = { 'statgroup.0': 'desc' };
+    return this;
+  }
+
+  /**
    * Add resistance requirements
    * Uses pseudo stats for total resistances
    */

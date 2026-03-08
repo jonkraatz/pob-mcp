@@ -466,6 +466,17 @@ async setTree(params: {
     return res.result;
   }
 
+  async getSlotWeights(params: {
+    slot: string;
+    dps_weight?: number;
+    ehp_weight?: number;
+    max_results?: number;
+  }): Promise<Array<{ tradeId: string; label: string; weight: number; normalizedWeight: number }>> {
+    const res = await this.send({ action: "get_slot_weights", params });
+    if (!res.ok) throw new Error(res.error || "get_slot_weights failed");
+    return (res.weights as Array<{ tradeId: string; label: string; weight: number; normalizedWeight: number }>) || [];
+  }
+
   async stop(): Promise<void> {
     if (!this.proc) return;
     try {
