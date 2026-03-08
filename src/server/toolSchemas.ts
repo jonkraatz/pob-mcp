@@ -1684,5 +1684,68 @@ export function getPoeNinjaToolSchemas(): any[] {
         required: ["league", "currency_chain"],
       },
     },
+    {
+      name: "analyze_slot_weights",
+      description:
+        "Ask PoB's calc engine which mods matter most for a gear slot. Returns mods ranked by their DPS + EHP impact on the currently loaded build. Run lua_start + lua_load_build first.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          slot: {
+            type: "string",
+            description:
+              "Gear slot name: 'Helmet', 'Gloves', 'Boots', 'Body Armour', 'Belt', 'Ring 1', 'Ring 2', 'Amulet', 'Weapon 1', 'Weapon 2'",
+          },
+          dps_weight: {
+            type: "number",
+            description: "DPS importance multiplier (default: 1.0)",
+          },
+          ehp_weight: {
+            type: "number",
+            description: "EHP importance multiplier (default: 0.5)",
+          },
+          max_results: {
+            type: "number",
+            description: "Max mods to return (default: 20)",
+          },
+        },
+        required: ["slot"],
+      },
+    },
+    {
+      name: "find_upgrade_items",
+      description:
+        "Search PoE trade for items ranked by their actual impact on your build. Runs slot weight analysis internally, then generates a PoE Trade 'type:weight' query so the best-for-your-build items appear first. Requires lua_start + lua_load_build.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          slot: {
+            type: "string",
+            description: "Gear slot to find upgrades for (e.g. 'Gloves', 'Ring 1')",
+          },
+          league: {
+            type: "string",
+            description: "PoE league name (e.g. 'Settlers', 'Standard')",
+          },
+          max_price_chaos: {
+            type: "number",
+            description: "Maximum price in chaos orbs (optional)",
+          },
+          dps_weight: {
+            type: "number",
+            description: "DPS importance multiplier (default: 1.0)",
+          },
+          ehp_weight: {
+            type: "number",
+            description: "EHP importance multiplier (default: 0.5)",
+          },
+          min_weight: {
+            type: "number",
+            description: "Skip mods below this normalized weight 0–100 (default: 10)",
+          },
+        },
+        required: ["slot", "league"],
+      },
+    },
   ];
 }

@@ -26,6 +26,7 @@ import { handleValidateBuild } from "../handlers/validationHandlers.js";
 import { handleExportBuild, handleSaveTree, handleSnapshotBuild, handleListSnapshots, handleRestoreSnapshot, handleExportBuildSummary } from "../handlers/exportHandlers.js";
 import { handleAnalyzeSkillLinks, handleSuggestSupportGems, handleCompareGemSetups, handleValidateGemQuality, handleFindOptimalLinks, handleGemUpgradePath } from "../handlers/skillGemHandlers.js";
 import { handleSearchTradeItems, handleGetItemPrice, handleGetLeagues, handleSearchStats, handleFindItemUpgrades, handleFindResistanceGear, handleCompareTradeItems } from "../handlers/tradeHandlers.js";
+import { handleAnalyzeSlotWeights, handleFindUpgradeItems } from "../handlers/upgradeHandlers.js";
 import { handleGetCurrencyRates, handleFindArbitrage, handleCalculateTradingProfit } from "../handlers/poeNinjaHandlers.js";
 import { handleSearchClusterJewels, handleAnalyzeClusterJewels, handleAnalyzeBuildClusterJewels } from "../handlers/clusterJewelHandlers.js";
 import { handleGenerateShoppingList } from "../handlers/shoppingListHandlers.js";
@@ -724,6 +725,30 @@ export async function routeToolCall(
       return await handleGemUpgradePath(
         deps.contextBuilder.buildSkillGemContext(),
         args || {}
+      );
+
+    case "analyze_slot_weights":
+      return await handleAnalyzeSlotWeights(
+        { getLuaClient: deps.getLuaClient },
+        {
+          slot: (args as any).slot as string,
+          dps_weight: (args as any).dps_weight as number | undefined,
+          ehp_weight: (args as any).ehp_weight as number | undefined,
+          max_results: (args as any).max_results as number | undefined,
+        },
+      );
+
+    case "find_upgrade_items":
+      return await handleFindUpgradeItems(
+        { getLuaClient: deps.getLuaClient, tradeClient: deps.tradeClient },
+        {
+          slot: (args as any).slot as string,
+          league: (args as any).league as string,
+          max_price_chaos: (args as any).max_price_chaos as number | undefined,
+          dps_weight: (args as any).dps_weight as number | undefined,
+          ehp_weight: (args as any).ehp_weight as number | undefined,
+          min_weight: (args as any).min_weight as number | undefined,
+        },
       );
 
     default:
