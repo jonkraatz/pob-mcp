@@ -17,7 +17,7 @@ import { handleListBuilds, handleAnalyzeBuild, handleCompareBuilds, handleGetBui
 import { handleStartWatching, handleStopWatching, handleGetRecentChanges, handleWatchStatus, handleRefreshTreeData } from "../handlers/watchHandlers.js";
 import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handleGetPassiveUpgrades, handleSuggestMasteries } from "../handlers/treeHandlers.js";
 import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
-import { handleLuaStart, handleLuaStop, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet } from "../handlers/luaHandlers.js";
+import { handleLuaStart, handleLuaStop, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet, handleTestNodeImpact, handleGetEhpSummary, handleGetRegenSummary, handleGetChargeSummary, handleGetSpellMitigation, handleGetBlockSummary, handleGetAilmentDps, handleGetAvoidanceSummary, handleGetProjectileConfig, handleGetLeechStats } from "../handlers/luaHandlers.js";
 import { handleAddItem, handleGetEquippedItems, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
@@ -750,6 +750,42 @@ export async function routeToolCall(
           min_weight: (args as any).min_weight as number | undefined,
         },
       );
+
+    // Group B: Focused stat query tools
+    case "test_node_impact":
+      return await handleTestNodeImpact(
+        luaContext,
+        args?.add_nodes as string[] | undefined,
+        args?.remove_nodes as string[] | undefined,
+        args?.stat_keys as string[] | undefined
+      );
+
+    case "get_ehp_summary":
+      return await handleGetEhpSummary(luaContext);
+
+    case "get_regen_summary":
+      return await handleGetRegenSummary(luaContext);
+
+    case "get_charge_summary":
+      return await handleGetChargeSummary(luaContext);
+
+    case "get_spell_mitigation":
+      return await handleGetSpellMitigation(luaContext);
+
+    case "get_block_summary":
+      return await handleGetBlockSummary(luaContext);
+
+    case "get_ailment_dps":
+      return await handleGetAilmentDps(luaContext);
+
+    case "get_avoidance_summary":
+      return await handleGetAvoidanceSummary(luaContext);
+
+    case "get_projectile_config":
+      return await handleGetProjectileConfig(luaContext);
+
+    case "get_leech_stats":
+      return await handleGetLeechStats(luaContext);
 
     default:
       throw new Error(`Unknown tool: ${name}`);

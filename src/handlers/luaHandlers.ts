@@ -787,3 +787,325 @@ export async function handleSelectItemSet(context: LuaHandlerContext, id: number
   return { content: [{ type: "text" as const, text }] };
   });
 }
+
+// ============================================================
+// Group B: Focused stat query tools
+// ============================================================
+
+export async function handleTestNodeImpact(
+  context: LuaHandlerContext,
+  addNodes?: string[],
+  removeNodes?: string[],
+  statKeys?: string[]
+) {
+  return wrapHandler('test node impact', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const defaultKeys = ['CombinedDPS', 'TotalDPS', 'Life', 'TotalEHP', 'Armour', 'EvasionChance'];
+    const keys = statKeys?.length ? statKeys : defaultKeys;
+
+    const baseline = await luaClient.getStats(keys);
+
+    const calcParams: { addNodes?: number[]; removeNodes?: number[] } = {};
+    if (addNodes?.length) calcParams.addNodes = addNodes.map(Number);
+    if (removeNodes?.length) calcParams.removeNodes = removeNodes.map(Number);
+
+    const modified = await luaClient.calcWith(calcParams);
+
+    const textLines: string[] = ['=== Node Impact Test ===', ''];
+
+    if (addNodes?.length) textLines.push(`Adding nodes: ${addNodes.join(', ')}`);
+    if (removeNodes?.length) textLines.push(`Removing nodes: ${removeNodes.join(', ')}`);
+    textLines.push('');
+
+    textLines.push('**Baseline:**');
+    for (const key of keys) {
+      const val = baseline[key];
+      if (val != null && val !== 0) textLines.push(`  ${key}: ${val}`);
+    }
+
+    textLines.push('');
+    textLines.push('**Modified:**');
+    for (const key of keys) {
+      const val = modified?.[key];
+      if (val != null && val !== 0) textLines.push(`  ${key}: ${val}`);
+    }
+
+    textLines.push('');
+    textLines.push('**Delta (modified - baseline):**');
+    let anyDelta = false;
+    for (const key of keys) {
+      const base = Number(baseline[key] ?? 0);
+      const mod = Number(modified?.[key] ?? 0);
+      const delta = mod - base;
+      if (Math.abs(delta) > 0.001) {
+        const sign = delta > 0 ? '+' : '';
+        textLines.push(`  ${key}: ${sign}${delta.toFixed(2)}`);
+        anyDelta = true;
+      }
+    }
+    if (!anyDelta) textLines.push('  No significant changes detected.');
+
+    const text = textLines.join('\n');
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleGetEhpSummary(context: LuaHandlerContext) {
+  return wrapHandler('get EHP summary', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const stats = await luaClient.getStats([
+      'TotalEHP', 'EHPSurvivalTime', 'Life', 'EnergyShield',
+      'PhysicalDamageReduction', 'SpellDamageReduction',
+    ]);
+
+    const textLines: string[] = ['=== EHP Summary ===', ''];
+    textLines.push(`Total EHP:              ${Number(stats.TotalEHP ?? 0).toLocaleString()}`);
+    if (stats.EHPSurvivalTime != null && stats.EHPSurvivalTime !== 0) {
+      textLines.push(`EHP Survival Time:      ${stats.EHPSurvivalTime}s`);
+    }
+    textLines.push(`Life:                   ${Number(stats.Life ?? 0).toLocaleString()}`);
+    if (stats.EnergyShield != null && stats.EnergyShield !== 0) {
+      textLines.push(`Energy Shield:          ${Number(stats.EnergyShield ?? 0).toLocaleString()}`);
+    }
+    textLines.push(`Phys Damage Reduction:  ${stats.PhysicalDamageReduction ?? 0}%`);
+    if (stats.SpellDamageReduction != null && stats.SpellDamageReduction !== 0) {
+      textLines.push(`Spell Damage Reduction: ${stats.SpellDamageReduction}%`);
+    }
+
+    const text = textLines.join('\n');
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleGetRegenSummary(context: LuaHandlerContext) {
+  return wrapHandler('get regen summary', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const stats = await luaClient.getStats([
+      'NetLifeRegen', 'NetManaRegen', 'ComprehensiveNetLifeRegen',
+      'LifeRegen', 'ManaRegen', 'LifeRecoup',
+    ]);
+
+    const textLines: string[] = ['=== Regen Summary ===', ''];
+    textLines.push(`Net Life Regen:              ${stats.NetLifeRegen ?? 0}/s`);
+    textLines.push(`Life Regen (flat):           ${stats.LifeRegen ?? 0}/s`);
+    if (stats.ComprehensiveNetLifeRegen != null && stats.ComprehensiveNetLifeRegen !== 0) {
+      textLines.push(`Comprehensive Net Life Regen: ${stats.ComprehensiveNetLifeRegen}/s`);
+    }
+    if (stats.LifeRecoup != null && stats.LifeRecoup !== 0) {
+      textLines.push(`Life Recoup:                 ${stats.LifeRecoup}/s`);
+    }
+    textLines.push(`Net Mana Regen:              ${stats.NetManaRegen ?? 0}/s`);
+    textLines.push(`Mana Regen (flat):           ${stats.ManaRegen ?? 0}/s`);
+
+    const text = textLines.join('\n');
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleGetChargeSummary(context: LuaHandlerContext) {
+  return wrapHandler('get charge summary', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const stats = await luaClient.getStats([
+      'PowerCharges', 'PowerChargesMax',
+      'FrenzyCharges', 'FrenzyChargesMax',
+      'EnduranceCharges', 'EnduranceChargesMax',
+    ]);
+
+    const textLines: string[] = ['=== Charge Summary ===', ''];
+    textLines.push(`Power Charges:     ${stats.PowerCharges ?? 0} / ${stats.PowerChargesMax ?? 0}`);
+    textLines.push(`Frenzy Charges:    ${stats.FrenzyCharges ?? 0} / ${stats.FrenzyChargesMax ?? 0}`);
+    textLines.push(`Endurance Charges: ${stats.EnduranceCharges ?? 0} / ${stats.EnduranceChargesMax ?? 0}`);
+
+    const text = textLines.join('\n');
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleGetSpellMitigation(context: LuaHandlerContext) {
+  return wrapHandler('get spell mitigation', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const stats = await luaClient.getStats([
+      'SpellSuppressionChance', 'EffectiveSpellSuppressionChance',
+      'SpellBlockChance', 'AttackDodgeChance', 'SpellDodgeChance',
+    ]);
+
+    const textLines: string[] = ['=== Spell Mitigation ===', ''];
+    textLines.push(`Spell Suppression:           ${stats.SpellSuppressionChance ?? 0}%`);
+    if (stats.EffectiveSpellSuppressionChance != null && stats.EffectiveSpellSuppressionChance !== 0) {
+      textLines.push(`Effective Spell Suppression: ${stats.EffectiveSpellSuppressionChance}%`);
+    }
+    textLines.push(`Spell Block:                 ${stats.SpellBlockChance ?? 0}%`);
+    textLines.push(`Attack Dodge:                ${stats.AttackDodgeChance ?? 0}%`);
+    textLines.push(`Spell Dodge:                 ${stats.SpellDodgeChance ?? 0}%`);
+
+    const text = textLines.join('\n');
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleGetBlockSummary(context: LuaHandlerContext) {
+  return wrapHandler('get block summary', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const stats = await luaClient.getStats([
+      'BlockChance', 'SpellBlockChance',
+      'ProjectileBlockChance', 'EffectiveAverageBlockChance',
+    ]);
+
+    const textLines: string[] = ['=== Block Summary ===', ''];
+    textLines.push(`Attack Block:            ${stats.BlockChance ?? 0}%`);
+    textLines.push(`Spell Block:             ${stats.SpellBlockChance ?? 0}%`);
+    textLines.push(`Projectile Block:        ${stats.ProjectileBlockChance ?? 0}%`);
+    if (stats.EffectiveAverageBlockChance != null && stats.EffectiveAverageBlockChance !== 0) {
+      textLines.push(`Effective Average Block: ${stats.EffectiveAverageBlockChance}%`);
+    }
+
+    const text = textLines.join('\n');
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleGetAilmentDps(context: LuaHandlerContext) {
+  return wrapHandler('get ailment DPS', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const stats = await luaClient.getStats([
+      'IgniteDPS', 'BleedDPS', 'PoisonDPS', 'TotalPoisonDPS',
+      'IgniteChance', 'BleedChance', 'PoisonChance', 'CombinedDPS',
+    ]);
+
+    const combined = Number(stats.CombinedDPS ?? 0);
+    const textLines: string[] = ['=== Ailment DPS ===', ''];
+
+    const formatPct = (ailmentDps: number) => {
+      if (combined <= 0) return '';
+      return ` (${((ailmentDps / combined) * 100).toFixed(1)}% of CombinedDPS)`;
+    };
+
+    const igniteDps = Number(stats.IgniteDPS ?? 0);
+    const bleedDps = Number(stats.BleedDPS ?? 0);
+    const poisonDps = Number(stats.PoisonDPS ?? stats.TotalPoisonDPS ?? 0);
+
+    textLines.push(`Ignite DPS:  ${igniteDps.toLocaleString()}${formatPct(igniteDps)}  (chance: ${stats.IgniteChance ?? 0}%)`);
+    textLines.push(`Bleed DPS:   ${bleedDps.toLocaleString()}${formatPct(bleedDps)}  (chance: ${stats.BleedChance ?? 0}%)`);
+    textLines.push(`Poison DPS:  ${poisonDps.toLocaleString()}${formatPct(poisonDps)}  (chance: ${stats.PoisonChance ?? 0}%)`);
+    if (stats.TotalPoisonDPS != null && stats.TotalPoisonDPS !== stats.PoisonDPS) {
+      textLines.push(`Total Poison DPS: ${Number(stats.TotalPoisonDPS).toLocaleString()}`);
+    }
+    textLines.push('');
+    textLines.push(`Combined DPS: ${combined.toLocaleString()}`);
+
+    const text = textLines.join('\n');
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleGetAvoidanceSummary(context: LuaHandlerContext) {
+  return wrapHandler('get avoidance summary', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const stats = await luaClient.getStats([
+      'EvadeChance', 'MeleeEvadeChance', 'ProjectileEvadeChance',
+      'AttackDodgeChance', 'SpellDodgeChance', 'Armour', 'Evasion',
+    ]);
+
+    const textLines: string[] = ['=== Avoidance Summary ===', ''];
+    textLines.push('**Evasion:**');
+    textLines.push(`  Evasion Rating:      ${Number(stats.Evasion ?? 0).toLocaleString()}`);
+    textLines.push(`  Evade Chance:        ${stats.EvadeChance ?? 0}%`);
+    if (stats.MeleeEvadeChance != null && stats.MeleeEvadeChance !== 0) {
+      textLines.push(`  Melee Evade:         ${stats.MeleeEvadeChance}%`);
+    }
+    if (stats.ProjectileEvadeChance != null && stats.ProjectileEvadeChance !== 0) {
+      textLines.push(`  Projectile Evade:    ${stats.ProjectileEvadeChance}%`);
+    }
+    textLines.push('');
+    textLines.push('**Dodge:**');
+    textLines.push(`  Attack Dodge:        ${stats.AttackDodgeChance ?? 0}%`);
+    textLines.push(`  Spell Dodge:         ${stats.SpellDodgeChance ?? 0}%`);
+    textLines.push('');
+    textLines.push('**Mitigation:**');
+    textLines.push(`  Armour:              ${Number(stats.Armour ?? 0).toLocaleString()}`);
+
+    const text = textLines.join('\n');
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleGetProjectileConfig(context: LuaHandlerContext) {
+  return wrapHandler('get projectile config', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const stats = await luaClient.getStats([
+      'ProjectileCount', 'ChainMax', 'PierceCount', 'ForkCountMax',
+      'Speed', 'AreaOfEffectRadiusMetres',
+    ]);
+
+    const textLines: string[] = ['=== Projectile Config ===', ''];
+    textLines.push(`Projectile Count:    ${stats.ProjectileCount ?? 1}`);
+    textLines.push(`Chain:               ${stats.ChainMax ?? 0}`);
+    textLines.push(`Pierce:              ${stats.PierceCount ?? 0}`);
+    textLines.push(`Fork:                ${stats.ForkCountMax ?? 0}`);
+    if (stats.Speed != null && stats.Speed !== 0) {
+      textLines.push(`Attack/Cast Speed:   ${stats.Speed}/s`);
+    }
+    if (stats.AreaOfEffectRadiusMetres != null && stats.AreaOfEffectRadiusMetres !== 0) {
+      textLines.push(`AoE Radius:          ${stats.AreaOfEffectRadiusMetres}m`);
+    }
+
+    const text = textLines.join('\n');
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleGetLeechStats(context: LuaHandlerContext) {
+  return wrapHandler('get leech stats', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const stats = await luaClient.getStats([
+      'LifeLeech', 'LifeLeechInstant', 'ManaLeech',
+      'LifeLeechGainRate', 'ManaLeechGainRate',
+    ]);
+
+    const textLines: string[] = ['=== Leech Stats ===', ''];
+    textLines.push(`Life Leech per Hit:    ${stats.LifeLeech ?? 0}`);
+    if (stats.LifeLeechInstant != null && stats.LifeLeechInstant !== 0) {
+      textLines.push(`Life Leech (Instant):  ${stats.LifeLeechInstant}`);
+    }
+    textLines.push(`Mana Leech per Hit:    ${stats.ManaLeech ?? 0}`);
+    if (stats.LifeLeechGainRate != null && stats.LifeLeechGainRate !== 0) {
+      textLines.push(`Life Leech Gain Rate:  ${Number(stats.LifeLeechGainRate).toLocaleString()}/s`);
+    }
+    if (stats.ManaLeechGainRate != null && stats.ManaLeechGainRate !== 0) {
+      textLines.push(`Mana Leech Gain Rate:  ${Number(stats.ManaLeechGainRate).toLocaleString()}/s`);
+    }
+
+    const text = textLines.join('\n');
+    return { content: [{ type: "text" as const, text }] };
+  });
+}

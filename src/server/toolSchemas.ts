@@ -1747,5 +1747,104 @@ export function getPoeNinjaToolSchemas(): any[] {
         required: ["slot", "league"],
       },
     },
+    // ============================================================
+    // Group B: Focused stat query tools
+    // ============================================================
+    {
+      name: "test_node_impact",
+      description: "Non-destructive what-if analysis: compute stat delta from adding/removing passive nodes without mutating the build. Uses PoB's calc_with action for atomic evaluation.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          add_nodes: {
+            type: "array",
+            items: { type: "string" },
+            description: "Node IDs to temporarily add (as strings)",
+          },
+          remove_nodes: {
+            type: "array",
+            items: { type: "string" },
+            description: "Node IDs to temporarily remove (as strings)",
+          },
+          stat_keys: {
+            type: "array",
+            items: { type: "string" },
+            description: "Stat keys to compare. Defaults to CombinedDPS, TotalDPS, Life, TotalEHP, Armour, EvasionChance",
+          },
+        },
+      },
+    },
+    {
+      name: "get_ehp_summary",
+      description: "Returns the build's effective health pool summary: TotalEHP, EHPSurvivalTime, Life, EnergyShield, PhysicalDamageReduction, SpellDamageReduction",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "get_regen_summary",
+      description: "Returns life and mana regeneration stats per second: NetLifeRegen, ComprehensiveNetLifeRegen, LifeRegen, LifeRecoup, NetManaRegen, ManaRegen",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "get_charge_summary",
+      description: "Returns current and maximum charge counts for Power, Frenzy, and Endurance charges as configured in the active build spec",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "get_spell_mitigation",
+      description: "Returns spell damage mitigation layers: SpellSuppressionChance, EffectiveSpellSuppressionChance, SpellBlockChance, AttackDodgeChance, SpellDodgeChance",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "get_block_summary",
+      description: "Returns block chance stats: BlockChance (attack), SpellBlockChance, ProjectileBlockChance, EffectiveAverageBlockChance",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "get_ailment_dps",
+      description: "Returns ailment DPS and application chances: IgniteDPS, BleedDPS, PoisonDPS, TotalPoisonDPS, IgniteChance, BleedChance, PoisonChance — each shown as % of CombinedDPS",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "get_avoidance_summary",
+      description: "Returns the avoidance layer breakdown: Evasion rating, EvadeChance, MeleeEvadeChance, ProjectileEvadeChance, AttackDodgeChance, SpellDodgeChance, Armour",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "get_projectile_config",
+      description: "Returns projectile behavior stats: ProjectileCount, ChainMax, PierceCount, ForkCountMax, Speed, AreaOfEffectRadiusMetres",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "get_leech_stats",
+      description: "Returns leech statistics per hit and gain rate: LifeLeech, LifeLeechInstant, ManaLeech, LifeLeechGainRate, ManaLeechGainRate",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
   ];
 }
