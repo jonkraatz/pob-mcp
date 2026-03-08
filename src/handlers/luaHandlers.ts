@@ -219,6 +219,16 @@ export async function handleLuaGetStats(context: LuaHandlerContext, category?: s
         'MinionTotalDPS', 'MinionCombinedDPS', 'MinionAverageDamage', 'MinionSpeed',
         'MinionLife', 'MinionArmour', 'MinionEnergyShield',
         'MinionFireResist', 'MinionColdResist', 'MinionLightningResist', 'MinionChaosResist',
+        // Ailment DPS
+        'IgniteDPS', 'BleedDPS', 'PoisonDPS', 'TotalPoisonDPS',
+        // Ailment chances
+        'IgniteChance', 'BleedChance', 'PoisonChance',
+        // Projectile behavior
+        'ProjectileCount', 'ChainMax', 'PierceCount', 'ForkCountMax',
+        // Area
+        'AreaOfEffectRadiusMetres',
+        // Leech
+        'LifeLeech', 'LifeLeechInstant', 'ManaLeech',
       ];
     } else if (category === 'defense') {
       fields = [
@@ -230,7 +240,18 @@ export async function handleLuaGetStats(context: LuaHandlerContext, category?: s
         'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist',
         'FireResistOverCap', 'ColdResistOverCap', 'LightningResistOverCap', 'ChaosResistOverCap',
         'TotalEHP', 'PhysicalMaximumHitTaken', 'FireMaximumHitTaken', 'ColdMaximumHitTaken',
-        'LightningMaximumHitTaken', 'ChaosMaximumHitTaken', 'EffectiveSpellSuppressionChance'
+        'LightningMaximumHitTaken', 'ChaosMaximumHitTaken', 'EffectiveSpellSuppressionChance',
+        // Regen and recovery
+        'NetLifeRegen', 'NetManaRegen', 'ComprehensiveNetLifeRegen', 'LifeRecoup',
+        // Charges
+        'PowerChargesMax', 'PowerCharges', 'FrenzyChargesMax', 'FrenzyCharges',
+        'EnduranceChargesMax', 'EnduranceCharges',
+        // Suppression
+        'SpellSuppressionChance',
+        // Block
+        'ProjectileBlockChance', 'EffectiveAverageBlockChance',
+        // Evasion by type
+        'MeleeEvadeChance', 'ProjectileEvadeChance',
       ];
     }
     // If category is 'all' or undefined, get all stats (fields = undefined)
