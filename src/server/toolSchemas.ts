@@ -160,7 +160,51 @@ export function getToolSchemas(): ToolSchema[] {
             type: "string",
             description: "Optional text filter for node names/stats",
           },
+          include_edges: {
+            type: "boolean",
+            description: "When true, each returned node includes predecessors (in:[X] nodes that must be allocated before it) and successors (out:[Y] nodes it leads to). Critical for BFS connectivity verification.",
+          },
         },
+      },
+    },
+    {
+      name: "decode_pob_code",
+      description: "Decode a PoB import code (base64url + zlib) back to raw XML and extract key build info. Does not require Lua bridge.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          pob_code: {
+            type: "string",
+            description: "PoB base64url encoded import string",
+          },
+        },
+        required: ["pob_code"],
+      },
+    },
+    {
+      name: "generate_build_skeleton",
+      description: "Generate a minimal valid PoB import code for a given class/ascendancy/main skill combination. Does not require Lua bridge. Useful as a starting point before loading into PoB.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          class_name: {
+            type: "string",
+            description: "Class name (e.g., 'Templar', 'Witch', 'Shadow')",
+          },
+          ascendancy: {
+            type: "string",
+            description: "Ascendancy name (e.g., 'Inquisitor', 'Elementalist')",
+          },
+          main_skill: {
+            type: "string",
+            description: "Main active skill gem name (e.g., 'Consecrated Path')",
+          },
+          level: {
+            type: "number",
+            description: "Character level (default: 1)",
+          },
+        },
+        required: ["class_name", "ascendancy", "main_skill"],
       },
     },
     {
@@ -206,6 +250,39 @@ export function getToolSchemas(): ToolSchema[] {
           notes: { type: "string", description: "Notes content to write (plain text or markdown)" },
         },
         required: ["build_name", "notes"],
+      },
+    },
+    {
+      name: "get_node_info",
+      description: "Look up a passive tree node by its numeric ID. Returns name, type (keystone/notable/jewel/minor), stats, and adjacent node IDs. Useful after find_path_to_node returns a list of IDs — use this to inspect each one.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          node_id: {
+            type: "number",
+            description: "Numeric passive tree node ID (e.g. 12345)",
+          },
+        },
+        required: ["node_id"],
+      },
+    },
+    {
+      name: "get_ascendancy_nodes",
+      description: "List all passive tree nodes belonging to a specific ascendancy class (e.g. 'Inquisitor', 'Elementalist', 'Juggernaut'). Useful when planning ascendancy allocation.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          class_name: {
+            type: "string",
+            description: "Ascendancy class name, case-insensitive (e.g. 'Inquisitor', 'Elementalist', 'Juggernaut', 'Slayer')",
+          },
+          node_type: {
+            type: "string",
+            description: "Filter by node type: 'notable', 'keystone', or 'any' (default: 'any')",
+            enum: ["notable", "keystone", "any"],
+          },
+        },
+        required: ["class_name"],
       },
     },
   ];
@@ -742,6 +819,126 @@ export function getLuaToolSchemas(): any[] {
           main_skill: { type: "string", description: "Override main skill name" },
           ascendancy: { type: "string", description: "Override ascendancy name" },
         },
+      },
+    },
+    {
+      name: "search_gems",
+      description: "Search the PoB gem database for gems by name, tag, or type. Returns gemId/skillId/variantId for use in XML and other tools. Does not require a build to be loaded.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Partial gem name to search for (case-insensitive)",
+          },
+          tag: {
+            type: "string",
+            description: "Filter by gem tag (e.g. 'fire', 'melee', 'support', 'cold', 'spell')",
+          },
+          gem_type: {
+            type: "string",
+            description: "Filter by gem type: 'active', 'support', 'vaal', or 'any' (default: 'any')",
+            enum: ["active", "support", "vaal", "any"],
+          },
+          limit: {
+            type: "number",
+            description: "Maximum results to return (default: 20)",
+          },
+        },
+      },
+    },
+    {
+      name: "analyze_node_efficiency",
+      description: "Test each allocated notable (and optionally minor) node by removing it and measuring DPS/EHP impact. Identifies inefficient nodes that are respec candidates. Requires lua_load_build.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          include_minor_nodes: {
+            type: "boolean",
+            description: "If true, also test minor (non-notable) nodes. Default: false.",
+          },
+          objective: {
+            type: "string",
+            description: "Weighting objective: 'dps', 'ehp', or 'balanced'. 'auto' (default) picks based on current build stats.",
+            enum: ["dps", "ehp", "balanced", "auto"],
+          },
+          flag_threshold_pct: {
+            type: "number",
+            description: "Nodes where removal costs less than this % of the weighted objective are flagged as respec candidates (default: -3.0)",
+          },
+        },
+      },
+    },
+    {
+      name: "rank_support_gems_for_skill",
+      description: "Rank all ~100 support gems by DPS contribution for a given active skill. Tests each support gem via live PoB calculation. Requires lua_load_build.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          skill_name: {
+            type: "string",
+            description: "Active skill gem name to test supports for (e.g. 'Consecrated Path')",
+          },
+          num_links: {
+            type: "number",
+            description: "Number of links in the setup (4, 5, or 6)",
+            enum: [4, 5, 6],
+          },
+          fixed_gems: {
+            type: "array",
+            items: { type: "string" },
+            description: "Gem names locked in that will not be tested (e.g. ['Awakened Brutality Support'])",
+          },
+          limit: {
+            type: "number",
+            description: "Number of top results to return (default: 10)",
+          },
+        },
+        required: ["skill_name", "num_links"],
+      },
+    },
+    {
+      name: "snapshot_diff_audit",
+      description: "Compare two build snapshots (XML files) across stats, passive tree nodes, gems, and items. Returns structured diff for all four dimensions. Requires lua_load_build.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          snapshot_a: {
+            type: "string",
+            description: "Build file name for the 'before' snapshot (e.g. 'MyBuild_v1.xml')",
+          },
+          snapshot_b: {
+            type: "string",
+            description: "Build file name for the 'after' snapshot (e.g. 'MyBuild_v2.xml')",
+          },
+        },
+        required: ["snapshot_a", "snapshot_b"],
+      },
+    },
+    {
+      name: "simulate_ascendancy_path",
+      description: "Simulate allocating ascendancy labs in sequence, measuring cumulative DPS/EHP delta at each step. Non-destructive — tree is unchanged after. Requires lua_load_build.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          paths: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                label: { type: "string", description: "Label for this lab step (e.g. 'Cruel Lab')" },
+                nodes: {
+                  type: "array",
+                  items: { type: "number" },
+                  description: "Ascendancy node IDs to allocate at this step",
+                },
+              },
+              required: ["label", "nodes"],
+            },
+            description: "Array of lab steps in order, each adding ascendancy nodes cumulatively",
+          },
+        },
+        required: ["paths"],
       },
     },
   ];
@@ -1617,6 +1814,33 @@ export function getBuildGoalsToolSchemas(): any[] {
           },
         },
         required: ["boss"],
+      },
+    },
+    {
+      name: "get_node_power",
+      description: "Step 0 of the tree-pathing workflow: scan unallocated passive nodes, simulate each with calcWith, and rank by power-per-point efficiency. Replaces guesswork with real PoB simulation. Use before find_path_to_node to decide which area of the tree to invest in next.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          focus: {
+            type: "string",
+            description: "What to optimize for (default: 'both')",
+            enum: ["dps", "defence", "both"],
+          },
+          radius: {
+            type: "number",
+            description: "BFS scan radius in tree steps from current allocation (default: 4)",
+          },
+          node_ids: {
+            type: "array",
+            items: { type: "number" },
+            description: "Optional: test only these specific node IDs instead of scanning nearby nodes",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum ranked results to return (default: 20)",
+          },
+        },
       },
     },
   ];

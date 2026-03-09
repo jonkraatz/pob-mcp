@@ -2,6 +2,7 @@ import type { BuildService } from "../services/buildService.js";
 import type { SkillGemService } from "../services/skillGemService.js";
 import type { PoBLuaApiClient } from "../pobLuaBridge.js";
 import { wrapHandler } from "../utils/errorHandling.js";
+import { readFileSync, statSync, existsSync, writeFileSync } from "node:fs";
 
 export interface SkillGemHandlerContext {
   buildService: BuildService;
@@ -566,6 +567,224 @@ export async function handleGemUpgradePath(
   outputLines.push('_Use `validate_gem_quality` for a full gem quality audit._');
 
   return { content: [{ type: 'text' as const, text: outputLines.join('\n') }] };
+}
+
+// ============================================================
+// Gems.lua parser — shared cache for gem database tools
+// ============================================================
+
+const GEMS_LUA_PATH = '/Users/jonkraatz/poe/PathOfBuilding/src/Data/Gems.lua';
+const GEMS_CACHE_PATH = '/tmp/pob-gems-cache.json';
+
+interface GemEntry {
+  gameId: string;
+  name: string;
+  variantId: string;
+  grantedEffectId: string;
+  tags: string[];
+  isSupport: boolean;
+  isVaal: boolean;
+}
+
+function parseGemsLuaForHandler(): Record<string, GemEntry> {
+  const text = readFileSync(GEMS_LUA_PATH, 'utf8');
+  const gemBlockRegex = /\["(Metadata\/Items\/Gems\/[^"]+)"\] = \{([\s\S]*?)\n\t\},/g;
+  const db: Record<string, GemEntry> = {};
+
+  for (const match of text.matchAll(gemBlockRegex)) {
+    const gameId = match[1];
+    const body = match[2];
+
+    const name = body.match(/\bname = "([^"]+)"/)?.[1] ?? '';
+    const variantId = body.match(/\bvariantId = "([^"]+)"/)?.[1] ?? '';
+    const grantedEffectId = body.match(/\bgrantedEffectId = "([^"]+)"/)?.[1] ?? '';
+
+    const tagsBlock = body.match(/\btags = \{([\s\S]*?)\n\t\t\},/)?.[1] ?? '';
+    const tags = [...tagsBlock.matchAll(/\b(\w+) = true/g)].map(m => m[1]);
+
+    const isSupport = tags.includes('support') || gameId.includes('SupportGem');
+    const isVaal = name.startsWith('Vaal ') || (gameId.includes('Vaal') && !gameId.includes('VaalOil'));
+
+    db[gameId] = { gameId, name, variantId, grantedEffectId, tags, isSupport, isVaal };
+  }
+
+  return db;
+}
+
+let gemsDbCache: Record<string, GemEntry> | null = null;
+
+function loadGemsDb(): Record<string, GemEntry> {
+  if (gemsDbCache) return gemsDbCache;
+
+  try {
+    const srcModTime = statSync(GEMS_LUA_PATH).mtimeMs;
+    if (existsSync(GEMS_CACHE_PATH)) {
+      const cacheModTime = statSync(GEMS_CACHE_PATH).mtimeMs;
+      if (cacheModTime > srcModTime) {
+        gemsDbCache = JSON.parse(readFileSync(GEMS_CACHE_PATH, 'utf8'));
+        return gemsDbCache!;
+      }
+    }
+    const db = parseGemsLuaForHandler();
+    writeFileSync(GEMS_CACHE_PATH, JSON.stringify(db));
+    gemsDbCache = db;
+    return db;
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to load Gems.lua: ${errMsg}`);
+  }
+}
+
+/**
+ * Handle search_gems tool call
+ */
+export async function handleSearchGems(
+  args: {
+    query?: string;
+    tag?: string;
+    gem_type?: 'active' | 'support' | 'vaal' | 'any';
+    limit?: number;
+  }
+) {
+  return wrapHandler('search gems', async () => {
+    const db = loadGemsDb();
+    const { query, tag, gem_type = 'any', limit = 20 } = args;
+
+    const queryLower = query?.toLowerCase();
+    const tagLower = tag?.toLowerCase();
+
+    const matches = Object.values(db).filter(gem => {
+      if (queryLower && !gem.name.toLowerCase().includes(queryLower)) return false;
+      if (tagLower && !gem.tags.some(t => t.toLowerCase().includes(tagLower))) return false;
+      if (gem_type === 'support' && !gem.isSupport) return false;
+      if (gem_type === 'active' && (gem.isSupport || gem.isVaal)) return false;
+      if (gem_type === 'vaal' && !gem.isVaal) return false;
+      return true;
+    });
+
+    const limited = matches.slice(0, limit);
+
+    const lines: string[] = [
+      `=== Gem Search Results ===`,
+      `Query: ${query || '(any)'}  Tag: ${tag || '(any)'}  Type: ${gem_type}`,
+      `Found ${matches.length} gems (showing ${limited.length}):`,
+      '',
+    ];
+
+    for (const gem of limited) {
+      const typeTag = gem.isVaal ? ' [VAAL]' : gem.isSupport ? ' [SUPPORT]' : ' [ACTIVE]';
+      lines.push(`**${gem.name}**${typeTag}`);
+      lines.push(`  gemId:     "${gem.gameId}"`);
+      lines.push(`  skillId:   "${gem.variantId}"`);
+      lines.push(`  variantId: "${gem.variantId}"`);
+      lines.push(`  tags: ${gem.tags.join(', ')}`);
+      lines.push('');
+    }
+
+    if (limited.length === 0) {
+      lines.push('No gems matched your search criteria.');
+    }
+
+    return {
+      content: [{ type: 'text' as const, text: lines.join('\n') }],
+    };
+  });
+}
+
+/**
+ * Handle rank_support_gems_for_skill tool call
+ */
+export async function handleRankSupportGemsForSkill(
+  context: SkillGemHandlerContext,
+  args: {
+    skill_name: string;
+    num_links: 4 | 5 | 6;
+    fixed_gems?: string[];
+    limit?: number;
+  }
+) {
+  return wrapHandler('rank support gems for skill', async () => {
+    if (!context.ensureLuaClient || !context.getLuaClient) {
+      throw new Error('Lua bridge not configured. Use lua_load_build first.');
+    }
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua bridge not active. Use lua_load_build first.');
+
+    const { skill_name, num_links, fixed_gems = [], limit = 10 } = args;
+
+    // Get baseline stats (current skill setup)
+    const baseStats = await luaClient.getStats(['CombinedDPS', 'TotalDPS', 'MinionTotalDPS']);
+    const baseDPS = (baseStats.CombinedDPS as number) || (baseStats.TotalDPS as number) || (baseStats.MinionTotalDPS as number) || 1;
+
+    // Get all support gems from the db
+    const db = loadGemsDb();
+    const supportGems = Object.values(db).filter(g => g.isSupport && !g.isVaal);
+
+    const notes: string[] = [];
+    const ranked: Array<{ gem_name: string; dps: number; delta: number; delta_pct: number }> = [];
+    const fixedGemSet = new Set(fixed_gems.map(n => n.toLowerCase()));
+
+    for (const gem of supportGems) {
+      if (fixedGemSet.has(gem.name.toLowerCase())) continue;
+
+      try {
+        // Create a temporary socket group with active + fixed + test support
+        const groupResult = await luaClient.createSocketGroup({ label: '__rank_test__', enabled: true });
+        const groupIndex: number = groupResult.index;
+
+        // Add active skill
+        await luaClient.addGem({ groupIndex, gemName: skill_name, level: 20, quality: 20, enabled: true });
+        // Add fixed gems
+        for (const fg of fixed_gems) {
+          await luaClient.addGem({ groupIndex, gemName: fg, level: 20, quality: 20, enabled: true });
+        }
+        // Add the test support gem
+        await luaClient.addGem({ groupIndex, gemName: gem.name, level: 20, quality: 20, enabled: true });
+
+        const testStats = await luaClient.getStats(['CombinedDPS', 'TotalDPS', 'MinionTotalDPS']);
+        const testDPS = (testStats.CombinedDPS as number) || (testStats.TotalDPS as number) || (testStats.MinionTotalDPS as number) || baseDPS;
+        const delta = testDPS - baseDPS;
+        const deltaPct = (delta / baseDPS) * 100;
+
+        ranked.push({ gem_name: gem.name, dps: testDPS, delta, delta_pct: deltaPct });
+
+        // Remove the temporary group (use removeSkill if available, otherwise leave)
+        try {
+          await luaClient.removeSkill({ groupIndex });
+        } catch { /* best-effort cleanup */ }
+      } catch {
+        notes.push(`${gem.name}: errored during test`);
+      }
+    }
+
+    ranked.sort((a, b) => b.dps - a.dps);
+    const top = ranked.slice(0, limit);
+
+    const lines: string[] = [
+      `=== Support Gem Ranking for ${skill_name} (${num_links}-link) ===`,
+      '',
+      `Baseline DPS: ${Math.round(baseDPS).toLocaleString()}`,
+      `Fixed gems: ${fixed_gems.length > 0 ? fixed_gems.join(', ') : '(none)'}`,
+      `Tested ${ranked.length} support gems (showing top ${top.length}):`,
+      '',
+    ];
+
+    for (let i = 0; i < top.length; i++) {
+      const r = top[i];
+      const sign = r.delta >= 0 ? '+' : '';
+      lines.push(`${i + 1}. **${r.gem_name}**`);
+      lines.push(`   DPS: ${Math.round(r.dps).toLocaleString()}  |  Delta: ${sign}${Math.round(r.delta).toLocaleString()} (${sign}${r.delta_pct.toFixed(1)}%)`);
+    }
+
+    if (notes.length > 0) {
+      lines.push('', `Warnings (${notes.length}):`, ...notes.slice(0, 5).map(n => `  - ${n}`));
+    }
+
+    return {
+      content: [{ type: 'text' as const, text: lines.join('\n') }],
+    };
+  });
 }
 
 /**

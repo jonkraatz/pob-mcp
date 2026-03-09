@@ -13,9 +13,9 @@ import type { ItemRecommendationEngine } from "../services/itemRecommendationEng
 import type { PoeNinjaClient } from "../services/poeNinjaClient.js";
 
 // Import handlers
-import { handleListBuilds, handleAnalyzeBuild, handleCompareBuilds, handleGetBuildStats, handleGetBuildNotes, handleSetBuildNotes } from "../handlers/buildHandlers.js";
+import { handleListBuilds, handleAnalyzeBuild, handleCompareBuilds, handleGetBuildStats, handleGetBuildNotes, handleSetBuildNotes, handleSnapshotDiffAudit, handleGenerateBuildSkeleton, handleDecodePobCode } from "../handlers/buildHandlers.js";
 import { handleStartWatching, handleStopWatching, handleGetRecentChanges, handleWatchStatus, handleRefreshTreeData } from "../handlers/watchHandlers.js";
-import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handleGetPassiveUpgrades, handleSuggestMasteries } from "../handlers/treeHandlers.js";
+import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handleGetPassiveUpgrades, handleSuggestMasteries, handleGetNodeInfo, handleGetAscendancyNodes, handleGetNodePower, handleAnalyzeNodeEfficiency, handleSimulateAscendancyPath } from "../handlers/treeHandlers.js";
 import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
 import { handleLuaStart, handleLuaStop, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet, handleTestNodeImpact, handleGetEhpSummary, handleGetRegenSummary, handleGetChargeSummary, handleGetSpellMitigation, handleGetBlockSummary, handleGetAilmentDps, handleGetAvoidanceSummary, handleGetProjectileConfig, handleGetLeechStats } from "../handlers/luaHandlers.js";
 import { handleAddItem, handleGetEquippedItems, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems } from "../handlers/itemSkillHandlers.js";
@@ -24,7 +24,7 @@ import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild }
 import { handleGetConfig, handleSetConfig, handleSetEnemyStats, handleSaveConfigPreset, handleLoadConfigPreset, handleListConfigPresets } from "../handlers/configHandlers.js";
 import { handleValidateBuild } from "../handlers/validationHandlers.js";
 import { handleExportBuild, handleSaveTree, handleSnapshotBuild, handleListSnapshots, handleRestoreSnapshot, handleExportBuildSummary } from "../handlers/exportHandlers.js";
-import { handleAnalyzeSkillLinks, handleSuggestSupportGems, handleCompareGemSetups, handleValidateGemQuality, handleFindOptimalLinks, handleGemUpgradePath } from "../handlers/skillGemHandlers.js";
+import { handleAnalyzeSkillLinks, handleSuggestSupportGems, handleCompareGemSetups, handleValidateGemQuality, handleFindOptimalLinks, handleGemUpgradePath, handleSearchGems, handleRankSupportGemsForSkill } from "../handlers/skillGemHandlers.js";
 import { handleSearchTradeItems, handleGetItemPrice, handleGetLeagues, handleSearchStats, handleFindItemUpgrades, handleFindResistanceGear, handleCompareTradeItems } from "../handlers/tradeHandlers.js";
 import { handleAnalyzeSlotWeights, handleFindUpgradeItems } from "../handlers/upgradeHandlers.js";
 import { handleGetCurrencyRates, handleFindArbitrage, handleCalculateTradingProfit } from "../handlers/poeNinjaHandlers.js";
@@ -122,7 +122,8 @@ export async function routeToolCall(
         treeContext,
         args?.build_name as string | undefined,
         args?.max_distance as number | undefined,
-        args?.filter as string | undefined
+        args?.filter as string | undefined,
+        args?.include_edges as boolean | undefined
       );
 
     case "find_path_to_node":
@@ -133,6 +134,32 @@ export async function routeToolCall(
         args.target_node_id as string,
         args.show_alternatives as boolean | undefined
       );
+
+    case "get_node_info":
+      if (!args || args.node_id == null) throw new Error("Missing node_id");
+      return await handleGetNodeInfo(treeContext, args.node_id as number);
+
+    case "get_ascendancy_nodes":
+      if (!args || !args.class_name) throw new Error("Missing class_name");
+      return await handleGetAscendancyNodes(
+        treeContext,
+        args.class_name as string,
+        args.node_type as "notable" | "keystone" | "any" | undefined
+      );
+
+    case "get_node_power": {
+      const nodePowerContext = {
+        getLuaClient: deps.getLuaClient,
+        ensureLuaClient: deps.ensureLuaClient,
+      };
+      return await handleGetNodePower(
+        nodePowerContext,
+        (args?.focus as "dps" | "defence" | "both") || "both",
+        (args?.radius as number) || 4,
+        args?.node_ids as number[] | undefined,
+        (args?.limit as number) || 20
+      );
+    }
 
     // Lua bridge tools
     case "lua_start":
@@ -786,6 +813,84 @@ export async function routeToolCall(
 
     case "get_leech_stats":
       return await handleGetLeechStats(luaContext);
+
+    // ========================================
+    // New tools (Phase 12)
+    // ========================================
+
+    case "search_gems":
+      return await handleSearchGems({
+        query: args?.query as string | undefined,
+        tag: args?.tag as string | undefined,
+        gem_type: args?.gem_type as 'active' | 'support' | 'vaal' | 'any' | undefined,
+        limit: args?.limit as number | undefined,
+      });
+
+    case "analyze_node_efficiency": {
+      const nodeEfficiencyContext = {
+        getLuaClient: deps.getLuaClient,
+        ensureLuaClient: deps.ensureLuaClient,
+      };
+      return await handleAnalyzeNodeEfficiency(
+        nodeEfficiencyContext,
+        args?.include_minor_nodes as boolean | undefined,
+        args?.objective as 'dps' | 'ehp' | 'balanced' | 'auto' | undefined,
+        args?.flag_threshold_pct as number | undefined
+      );
+    }
+
+    case "rank_support_gems_for_skill": {
+      if (!args?.skill_name) throw new Error("Missing skill_name");
+      if (!args?.num_links) throw new Error("Missing num_links");
+      return await handleRankSupportGemsForSkill(
+        deps.contextBuilder.buildSkillGemContext(),
+        {
+          skill_name: args.skill_name as string,
+          num_links: args.num_links as 4 | 5 | 6,
+          fixed_gems: args.fixed_gems as string[] | undefined,
+          limit: args.limit as number | undefined,
+        }
+      );
+    }
+
+    case "snapshot_diff_audit": {
+      if (!args?.snapshot_a) throw new Error("Missing snapshot_a");
+      if (!args?.snapshot_b) throw new Error("Missing snapshot_b");
+      return await handleSnapshotDiffAudit(
+        handlerContext,
+        args.snapshot_a as string,
+        args.snapshot_b as string
+      );
+    }
+
+    case "simulate_ascendancy_path": {
+      if (!args?.paths) throw new Error("Missing paths array");
+      const ascendancyContext = {
+        getLuaClient: deps.getLuaClient,
+        ensureLuaClient: deps.ensureLuaClient,
+      };
+      return await handleSimulateAscendancyPath(
+        ascendancyContext,
+        args.paths as Array<{ label: string; nodes: number[] }>
+      );
+    }
+
+    case "generate_build_skeleton": {
+      if (!args?.class_name) throw new Error("Missing class_name");
+      if (!args?.ascendancy) throw new Error("Missing ascendancy");
+      if (!args?.main_skill) throw new Error("Missing main_skill");
+      return await handleGenerateBuildSkeleton({
+        class_name: args.class_name as string,
+        ascendancy: args.ascendancy as string,
+        main_skill: args.main_skill as string,
+        level: args.level as number | undefined,
+      });
+    }
+
+    case "decode_pob_code": {
+      if (!args?.pob_code) throw new Error("Missing pob_code");
+      return await handleDecodePobCode(args.pob_code as string);
+    }
 
     default:
       throw new Error(`Unknown tool: ${name}`);

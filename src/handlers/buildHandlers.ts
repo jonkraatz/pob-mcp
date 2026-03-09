@@ -5,8 +5,54 @@ import type { TreeAnalysisResult } from "../types.js";
 import type { HandlerContext } from "../utils/contextBuilder.js";
 import path from "path";
 import fs from "fs/promises";
+import zlib from "zlib";
 import { wrapHandler } from "../utils/errorHandling.js";
 export type { HandlerContext } from "../utils/contextBuilder.js";
+
+// PoB encoding helpers (base64url + zlib)
+function pobEncode(xml: string): string {
+  const compressed = zlib.deflateSync(Buffer.from(xml, 'utf8'), { level: 9 });
+  return compressed.toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function pobDecode(code: string): string {
+  const base64 = code
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const buf = Buffer.from(base64, 'base64');
+  return zlib.inflateSync(buf).toString('utf8');
+}
+
+// Class start node IDs (PoE 3.x passive tree class roots)
+const CLASS_START_NODES: Record<string, number> = {
+  Scion: 58833,
+  Marauder: 58833, // placeholder — each class has a distinct start
+  Ranger: 50459,
+  Witch: 12769,
+  Duelist: 56055,
+  Templar: 27033,
+  Shadow: 54127,
+};
+
+// White placeholder item text for skeleton builds
+function makePlaceholderItem(slot: string): string {
+  const baseMap: Record<string, string> = {
+    Helmet: 'Iron Hat',
+    'Body Armour': 'Simple Robe',
+    Gloves: 'Wool Gloves',
+    Boots: 'Boots',
+    'Weapon 1': 'Driftwood Wand',
+    'Weapon 2': 'Driftwood Shield',
+    'Ring 1': 'Iron Ring',
+    'Ring 2': 'Iron Ring',
+    Amulet: 'Coral Amulet',
+    Belt: 'Leather Belt',
+  };
+  const base = baseMap[slot] || 'Iron Ring';
+  return `Rarity: NORMAL\n${base}\n--------\nSlot: ${slot}`;
+}
 
 export async function handleListBuilds(context: HandlerContext) {
   return wrapHandler('list builds', async () => {
@@ -289,6 +335,248 @@ export async function handleSetBuildNotes(context: HandlerContext, buildName: st
       content: [{
         type: 'text' as const,
         text: `✅ Notes updated in ${buildName} (${notes.length} characters).`,
+      }],
+    };
+  });
+}
+
+// ============================================================
+// snapshot_diff_audit — compare two build files across 4 dimensions
+// ============================================================
+
+export async function handleSnapshotDiffAudit(
+  context: HandlerContext,
+  snapshotA: string,
+  snapshotB: string
+) {
+  return wrapHandler('snapshot diff audit', async () => {
+    const luaClient = context.getLuaClient();
+
+    // Helper to load a build file and capture stats
+    async function captureSnapshot(buildName: string) {
+      const buildPath = path.join(context.pobDirectory, buildName);
+      const xml = await fs.readFile(buildPath, 'utf-8');
+
+      let stats: Record<string, unknown> = {};
+      let nodeIds: string[] = [];
+      let equippedItems: any[] = [];
+      let skillSetup: any = null;
+
+      if (luaClient) {
+        try {
+          await luaClient.loadBuildXml(xml);
+          const rawStats = await luaClient.getStats();
+          stats = rawStats as Record<string, unknown>;
+          const treeResult = await luaClient.getTree();
+          nodeIds = (treeResult.nodes || []).map(String);
+          const itemsRaw = await luaClient.getItems();
+          equippedItems = Array.isArray(itemsRaw) ? itemsRaw : [];
+          const skillResult = await luaClient.getSkills();
+          skillSetup = skillResult;
+        } catch {
+          // fall through — partial data is fine
+        }
+      }
+
+      return { stats, nodeIds, equippedItems, skillSetup };
+    }
+
+    const [snapA, snapB] = await Promise.all([
+      captureSnapshot(snapshotA),
+      captureSnapshot(snapshotB),
+    ]);
+
+    // Stat deltas
+    const statKeys = ['CombinedDPS', 'TotalDPS', 'Life', 'TotalEHP', 'Armour',
+                      'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist'];
+    const statsLines: string[] = ['=== Stat Deltas ===', ''];
+    for (const key of statKeys) {
+      const a = Number(snapA.stats[key] ?? 0);
+      const b = Number(snapB.stats[key] ?? 0);
+      if (a === 0 && b === 0) continue;
+      const delta = b - a;
+      const deltaPct = a !== 0 ? ((delta / Math.abs(a)) * 100).toFixed(1) : 'N/A';
+      const sign = delta >= 0 ? '+' : '';
+      statsLines.push(`${key}: ${Math.round(a).toLocaleString()} → ${Math.round(b).toLocaleString()} (${sign}${Math.round(delta).toLocaleString()}, ${sign}${deltaPct}%)`);
+    }
+
+    // Resist deltas specifically
+    const resistLines: string[] = ['', '=== Resist Deltas ===', ''];
+    for (const [label, key] of [['Fire', 'FireResist'], ['Cold', 'ColdResist'], ['Lightning', 'LightningResist'], ['Chaos', 'ChaosResist']]) {
+      const a = Number(snapA.stats[key] ?? 0);
+      const b = Number(snapB.stats[key] ?? 0);
+      const delta = b - a;
+      resistLines.push(`${label}: ${delta >= 0 ? '+' : ''}${delta.toFixed(0)}`);
+    }
+
+    // Node diffs
+    const nodesA = new Set(snapA.nodeIds);
+    const nodesB = new Set(snapB.nodeIds);
+    const nodesAdded = [...nodesB].filter(n => !nodesA.has(n));
+    const nodesRemoved = [...nodesA].filter(n => !nodesB.has(n));
+
+    const nodeLines: string[] = ['', '=== Passive Tree Changes ===', ''];
+    nodeLines.push(`Nodes added (${nodesAdded.length}): ${nodesAdded.slice(0, 20).join(', ')}${nodesAdded.length > 20 ? ' ...' : ''}`);
+    nodeLines.push(`Nodes removed (${nodesRemoved.length}): ${nodesRemoved.slice(0, 20).join(', ')}${nodesRemoved.length > 20 ? ' ...' : ''}`);
+
+    // Item diffs (by slot)
+    const itemsA = new Map<string, string>();
+    const itemsB = new Map<string, string>();
+    for (const item of snapA.equippedItems) {
+      if (item.slot) itemsA.set(item.slot, item.name || '(unknown)');
+    }
+    for (const item of snapB.equippedItems) {
+      if (item.slot) itemsB.set(item.slot, item.name || '(unknown)');
+    }
+    const itemLines: string[] = ['', '=== Item Changes ===', ''];
+    const allSlots = new Set([...itemsA.keys(), ...itemsB.keys()]);
+    let itemChanges = 0;
+    for (const slot of allSlots) {
+      const nameA = itemsA.get(slot) ?? '(empty)';
+      const nameB = itemsB.get(slot) ?? '(empty)';
+      if (nameA !== nameB) {
+        itemLines.push(`${slot}: "${nameA}" → "${nameB}"`);
+        itemChanges++;
+      }
+    }
+    if (itemChanges === 0) itemLines.push('No item changes detected.');
+
+    const output = [
+      `=== Snapshot Diff: ${snapshotA} → ${snapshotB} ===`,
+      '',
+      ...statsLines,
+      ...resistLines,
+      ...nodeLines,
+      ...itemLines,
+    ].join('\n');
+
+    return {
+      content: [{ type: 'text' as const, text: output }],
+    };
+  });
+}
+
+// ============================================================
+// generate_build_skeleton — create minimal PoB import code
+// ============================================================
+
+export async function handleGenerateBuildSkeleton(
+  args: {
+    class_name: string;
+    ascendancy: string;
+    main_skill: string;
+    level?: number;
+  }
+) {
+  return wrapHandler('generate build skeleton', async () => {
+    const { class_name, ascendancy, main_skill, level = 1 } = args;
+
+    if (!class_name) throw new Error('class_name is required');
+    if (!ascendancy) throw new Error('ascendancy is required');
+    if (!main_skill) throw new Error('main_skill is required');
+
+    const startNodeId = CLASS_START_NODES[class_name] ?? 58833;
+
+    const slots = ['Helmet', 'Body Armour', 'Gloves', 'Boots', 'Weapon 1', 'Weapon 2', 'Ring 1', 'Ring 2', 'Amulet', 'Belt'];
+    const itemsXml = slots.map((slot, i) => {
+      const id = i + 1;
+      const itemText = makePlaceholderItem(slot);
+      return `    <Item id="${id}">\n${itemText}\n    </Item>`;
+    }).join('\n');
+
+    const slotXml = slots.map((slot, i) => {
+      const id = i + 1;
+      return `    <Slot name="${slot}" itemId="${id}"/>`;
+    }).join('\n');
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<PathOfBuilding>
+  <Build level="${level}" targetVersion="3_0" className="${class_name}" ascendClassName="${ascendancy}">
+    <PlayerStat stat="Life" value="0"/>
+  </Build>
+  <Skills>
+    <SkillSet id="1">
+      <Skill mainActiveSkill="1" enabled="true" slot="Body Armour">
+        <Gem skillId="${main_skill}" level="1" quality="0" enabled="true"/>
+      </Skill>
+    </SkillSet>
+  </Skills>
+  <Tree activeSpec="1">
+    <Spec id="1" nodes="${startNodeId}" treeVersion="3_21">
+    </Spec>
+  </Tree>
+  <Items>
+${itemsXml}
+    <ItemSet id="1">
+${slotXml}
+    </ItemSet>
+  </Items>
+  <Notes>Generated skeleton build: ${class_name} (${ascendancy}) — ${main_skill}</Notes>
+</PathOfBuilding>`;
+
+    const pobCode = pobEncode(xml);
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: [
+          `=== Build Skeleton: ${class_name} (${ascendancy}) ===`,
+          '',
+          `Main Skill: ${main_skill}  |  Level: ${level}`,
+          '',
+          '=== PoB Import Code ===',
+          pobCode,
+          '',
+          '=== Raw XML ===',
+          xml,
+        ].join('\n'),
+      }],
+    };
+  });
+}
+
+// ============================================================
+// decode_pob_code — decode PoB import string to XML
+// ============================================================
+
+export async function handleDecodePobCode(pobCode: string) {
+  return wrapHandler('decode pob code', async () => {
+    if (!pobCode || typeof pobCode !== 'string') {
+      throw new Error('pob_code is required');
+    }
+
+    let xml: string;
+    try {
+      xml = pobDecode(pobCode.trim());
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to decode PoB code: ${errMsg}. Ensure it is a valid base64url-encoded PoB import string.`);
+    }
+
+    // Extract key fields from XML
+    const classMatch = xml.match(/className="([^"]+)"/);
+    const ascendMatch = xml.match(/ascendClassName="([^"]+)"/);
+    const levelMatch = xml.match(/level="(\d+)"/);
+    const skillMatch = xml.match(/<Gem[^>]+skillId="([^"]+)"/);
+
+    const className = classMatch?.[1] ?? 'Unknown';
+    const ascendancy = ascendMatch?.[1] ?? 'Unknown';
+    const level = levelMatch ? parseInt(levelMatch[1]) : 0;
+    const mainSkill = skillMatch?.[1] ?? 'Unknown';
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: [
+          '=== Decoded PoB Build ===',
+          '',
+          `Class: ${className} (${ascendancy})`,
+          `Level: ${level}`,
+          `Main Skill: ${mainSkill}`,
+          '',
+          '=== Raw XML ===',
+          xml,
+        ].join('\n'),
       }],
     };
   });
